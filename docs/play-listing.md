@@ -4,9 +4,10 @@
 Controlled
 
 ## Short description (80 max)
-en-US: A remote for your LG TV. No ads, no account, nothing leaves your home.
+en-US: A remote for your LG TV. It talks only to your TV, over your home Wi-Fi.
+(Play flags "no ads" style wording in the short description as promotional; keep it out.)
 
-es-419: Un control remoto para tu TV LG. Sin anuncios ni cuentas. Nada sale de tu casa.
+es-419: Un control remoto para tu TV LG. Solo habla con tu TV, por el Wi-Fi de tu casa.
 
 ## Full description (4000 max)
 en-US:
@@ -61,3 +62,7 @@ en-US: First release: a remote for LG webOS TVs. D-pad, volume, channels, power 
 - Ads: no. App access: all functionality available without special access (it needs an LG webOS TV on the same Wi-Fi; no login).
 - Content rating: Utility, no user interaction, no user-generated content, no location sharing, no purchases → Everyone.
 - Target audience: 18+. Government: no. Financial features: none. Health: no. News: no.
+
+## Store graphics
+- Icon and feature graphic: `docs/brand/art.py` (placeholder art). Phone screenshots: `docs/brand/screens/` (Juan's POCO X7 Pro with his TV, cropped to 1:2).
+- Before going public: screenshots show third-party app logos (Netflix, Disney+, HBO Max) from Juan's TV; consider ones without them.
