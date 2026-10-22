@@ -118,7 +118,7 @@ fun AppsSheet(model: RemoteModel, close: () -> Unit) {
             label = { Text(t.searchApps) }, singleLine = true, leadingIcon = { Icon(painterResource(R.drawable.sym_search), null) },
         )
         if (model.apps.isEmpty()) Text(t.appsLoading, Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        LazyVerticalGrid(GridCells.Adaptive(84.dp), Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             fun tiles(list: List<TvApp>, frequent: Boolean = false) = items(list, key = { it.id }) { app ->
                 val pinned = app.id in tv.pins
                 Box {

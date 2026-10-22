@@ -221,16 +221,16 @@ private fun CertificateNotice(forget: () -> Unit) {
     }
 }
 
-/** Up to five of the person's apps (pinned, then most used), then All apps. */
+/** Four of the person's apps (pinned, then most used), then All apps: five columns leave room for 60dp icons with 8dp between. */
 @Composable
 private fun Dock(model: RemoteModel, tv: PairedTv, enabled: Boolean, all: () -> Unit) {
     val t = LocalStrings.current
-    val docked = dock(model.apps, tv.pins, tv.uses)
+    val docked = dock(model.apps, tv.pins, tv.uses, size = 4)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         for (app in docked) AppTile(app, model, Modifier.weight(1f), enabled, compact = true) { model.launch(app) }
         Column(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClickLabel = t.allApps, onClick = all).padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(52.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(ICON_DOCK).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.sym_apps), null)
             }
             Text(t.allApps, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -238,10 +238,14 @@ private fun Dock(model: RemoteModel, tv: PairedTv, enabled: Boolean, all: () -> 
     }
 }
 
+// App icon sizes (agy draft, reviewed): on a 375dp phone the dock's 5 columns are ~68dp and the sheet's 4 are ~88dp.
+val ICON_DOCK = 60.dp
+val ICON_GRID = 72.dp
+
 /** An app as the TV shows it: its own icon (a monogram until the icon arrives), its name below. */
 @Composable
 fun AppTile(app: TvApp, model: RemoteModel, modifier: Modifier, enabled: Boolean, compact: Boolean, badge: (@Composable () -> Unit)? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
-    val size = if (compact) 52.dp else 64.dp
+    val size = if (compact) ICON_DOCK else ICON_GRID
     Column(
         modifier.clip(MaterialTheme.shapes.medium)
             .then(if (onLongClick != null) Modifier.combinedClickableCompat(enabled, app.title, onClick, onLongClick) else Modifier.clickable(enabled, onClickLabel = app.title, onClick = onClick))
