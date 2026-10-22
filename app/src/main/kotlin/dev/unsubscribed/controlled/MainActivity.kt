@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) shared(intent)
         setContent {
             val strings = remember(LocalConfiguration.current) { stringsOf(resources.configuration.locales[0].language) }
             CompositionLocalProvider(LocalStrings provides strings) {
@@ -53,6 +55,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        shared(intent)
+    }
+
+    /** A link from the share sheet goes to the TV; the remote stays open to control what plays. */
+    private fun shared(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND) return
+        val t = stringsOf(resources.configuration.locales[0].language)
+        val ok = model.tv != null && model.share(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
+        Toast.makeText(this, if (model.tv == null) t.pairFirst else if (ok) t.openingOnTv else t.noLink, Toast.LENGTH_SHORT).show()
     }
 
     override fun onStart() {

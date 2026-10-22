@@ -107,6 +107,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     private var grace: Job? = null
     private var visible = false
     private val queue = PressQueue<Press>()
+    /** A link shared from the phone, kept until the TV is connected (no 1 s limit: the person asked for it). */
+    private var pendingShare: TvLaunch? = null
 
     private val wifi = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -357,6 +359,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         val p = runCatching { c.pointer() }.getOrNull()
         pointer = p
         queue.drain(System.currentTimeMillis()).forEach { it(c, p) }
+        sendShare(c)
         val watchers = listOf(
             viewModelScope.launch { loadApps(c) },
             viewModelScope.launch {
@@ -480,6 +483,28 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun launch(app: TvApp) {
         request("system.launcher/launch", buildJsonObject { put("id", app.id) })
         tv?.let { save(it.copy(uses = it.uses + (app.id to (it.uses[app.id] ?: 0) + 1))) }
+    }
+
+    /** "Play on TV" from the share sheet: false when the text has no link. */
+    fun share(text: String): Boolean {
+        pendingShare = shareLaunch(text) ?: return false
+        val c = client
+        if (c != null && link == Link.Connected) sendShare(c) else if (link == Link.Off || link == Link.Connected) connect()
+        return true
+    }
+
+    private fun sendShare(c: TvClient) {
+        val launch = pendingShare ?: return
+        pendingShare = null
+        val payload = buildJsonObject {
+            put("id", launch.appId)
+            launch.contentId?.let { put("contentId", it) }
+            launch.target?.let { put("target", it) }
+        }
+        viewModelScope.launch {
+            runCatching { c.request("system.launcher/launch", payload) }
+                .onSuccess { log { "share $payload: $it" } }.onFailure { log { "share $payload failed: $it" } }
+        }
     }
 
     fun switchInput(input: TvInput) = request("tv/switchInput", buildJsonObject { put("inputId", input.id) })

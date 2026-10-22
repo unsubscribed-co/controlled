@@ -2,4 +2,7 @@
 <resources>
     <!-- The launcher label only; every text the app shows is in Strings.kt. -->
     <string name="app_name" translatable="false">Controlled</string>
+    <!-- Labels the system shows outside the app (share sheet, Quick Settings), so they must be resources; values-es has the Spanish. -->
+    <string name="share_label">Play on TV</string>
+    <string name="tile_label">TV remote</string>
 </resources>

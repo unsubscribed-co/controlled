@@ -102,6 +102,9 @@ interface Strings {
     val touchpadHint: String
     val close: String
 
+    val openingOnTv: String
+    val noLink: String
+    val pairFirst: String
     // Dev self-update
     val newVersion: String
     val update: String
@@ -199,6 +202,9 @@ object En : Strings {
     override val touchpadHint = "Drag to move, tap to click, two fingers to scroll"
     override val close = "Close"
 
+    override val openingOnTv = "Opening on your TV"
+    override val noLink = "There's no link to open on the TV"
+    override val pairFirst = "Pick your TV first, then share again"
     override val newVersion = "A new version is available"
     override val update = "Update"
 }
@@ -295,6 +301,9 @@ object Es : Strings {
     override val touchpadHint = "Arrastra para mover, toca para hacer clic, dos dedos para desplazarte"
     override val close = "Cerrar"
 
+    override val openingOnTv = "Abriendo en tu TV"
+    override val noLink = "No hay ningún enlace para abrir en el TV"
+    override val pairFirst = "Primero elige tu TV y vuelve a compartir"
     override val newVersion = "Hay una versión nueva"
     override val update = "Actualizar"
 }
