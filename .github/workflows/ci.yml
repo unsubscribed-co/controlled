@@ -1,0 +1,52 @@
+# Tests on every push and pull request; pushes to main then publish Controlled Dev. Prod ships by hand through Google Play.
+name: CI
+on:
+  push:
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v5
+      # Unit tests, lint, and an R8 build to catch what minification breaks (prodRelease comes out unsigned without the upload key).
+      - run: ./gradlew --no-daemon :app:testProdDebugUnitTest :app:lintProdDebug :app:assembleProdRelease
+
+  # The role exists only in the dev account and may only write controlled/* on the dev site, so nothing here reaches prod.
+  deploy-dev:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: android
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    env:
+      AWS_PROFILE_DEV: '' # release.sh: use the role's credentials, not an SSO profile
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the dev versionCode is the commit count
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::727728512874:role/controlled-dev-deploy
+          aws-region: us-east-2
+      - name: Release Controlled Dev
+        run: |
+          aws ssm get-parameter --name /controlled-dev/dev-keystore --with-decryption --query Parameter.Value --output text | base64 -d > "$RUNNER_TEMP/dev.keystore"
+          CONTROLLED_DEV_STORE_FILE="$RUNNER_TEMP/dev.keystore" ./release.sh dev

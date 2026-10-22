@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark window behind Compose, so dark mode doesn't flash white while starting. -->
+    <style name="Theme.Controlled" parent="android:Theme.Material.NoActionBar" />
+</resources>

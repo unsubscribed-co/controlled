@@ -1,0 +1,7 @@
+{
+  "prod": { "homeUrl": "https://unsubscribed.dev/controlled" },
+  "dev": {
+    "homeUrl": "https://dev.unsubscribed.dev/controlled",
+    "signingSha256": "3b84a966a29914cec2f97e3831ae0f25a7333acc03d25a9fa2d09f57444c0898"
+  }
+}

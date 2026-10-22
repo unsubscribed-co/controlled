@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- shortcut: a hand-drawn d-pad ring with the ember standby dot; replace with the house-style "C" icon (stacksplit/visual-style) once Juan generates it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFF2EEE9" android:strokeWidth="7" android:fillColor="#00000000"
+        android:pathData="M54,32a22,22 0 1,1 0,44a22,22 0 1,1 0,-44z" />
+    <path android:fillColor="#FFFF6A3D" android:pathData="M54,46a8,8 0 1,1 0,16a8,8 0 1,1 0,-16z" />
+</vector>
