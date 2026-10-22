@@ -13,13 +13,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.DatagramPacket
 import java.net.DatagramSocket
-import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
 import java.net.URI
-import java.net.URL
 
 /** A TV that answered the search. [ip] is the address we connect to; [name] is friendlyName without a leading "[LG] ". */
 data class FoundTv(val ip: String, val name: String, val model: String?, val usn: String?)
@@ -86,7 +84,7 @@ object Ssdp {
      * Sends the M-SEARCH 3 times, 500 ms apart, to 239.255.255.250:1900 from a DatagramSocket bound to the Wi-Fi
      * interface's IPv4 address, holding a WifiManager.MulticastLock (tag "controlled-ssdp", reference counted false)
      * for the whole search and releasing it in finally. Reads answers with a short socket timeout so cancellation is
-     * prompt. Fetches each LOCATION with HttpURLConnection (connect/read timeout 2000 ms). If the description can't be
+     * prompt. Fetches each LOCATION over a plain socket (timeouts 2000 ms). If the description can't be
      * fetched, still emit the TV with name = "LG TV" fallback and model null. Only accept LOCATION hosts that equal the
      * datagram's source address (ignore anything else). Runs on Dispatchers.IO.
      */
@@ -194,26 +192,19 @@ object Ssdp {
         return null
     }
 
-    private fun fetchDescription(urlString: String): String? {
-        var connection: HttpURLConnection? = null
-        return try {
-            val url = URL(urlString)
-            connection = (url.openConnection() as? HttpURLConnection)?.apply {
-                connectTimeout = 2000
-                readTimeout = 2000
-                requestMethod = "GET"
-                instanceFollowRedirects = true
-            } ?: return null
-
-            if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        } finally {
-            connection?.disconnect()
+    /**
+     * The TV's description XML over a plain socket: Android blocks cleartext HTTP for apps targeting 28+, and the TV only
+     * serves it on http (measured: port 1137). Allowing cleartext app-wide would be the bigger hole.
+     */
+    private fun fetchDescription(urlString: String): String? = runCatching {
+        val uri = URI(urlString)
+        java.net.Socket().use { socket ->
+            socket.connect(InetSocketAddress(uri.host, if (uri.port > 0) uri.port else 80), 2000)
+            socket.soTimeout = 2000
+            val path = uri.rawPath?.ifEmpty { "/" } ?: "/"
+            socket.getOutputStream().write("GET $path HTTP/1.0\r\nHost: ${uri.host}\r\nConnection: close\r\n\r\n".toByteArray())
+            val response = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+            response.takeIf { it.startsWith("HTTP/1.") && it.substringBefore("\r\n").contains(" 200") }?.substringAfter("\r\n\r\n")
         }
-    }
+    }.getOrNull()
 }

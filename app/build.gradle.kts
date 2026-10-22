@@ -41,6 +41,8 @@ android {
             val urls = config.getValue(env) as Map<String, String>
             // The public page: download and latest.json.
             buildConfigField("String", "HOME_URL", "\"${urls.getValue("homeUrl").trimEnd('/')}\"")
+            // Dev logs connection timings and TV answers (adb logcat -s Controlled); prod never does.
+            buildConfigField("boolean", "LOG", "${env == "dev"}")
         }
         getByName("dev") {
             applicationIdSuffix = ".dev"

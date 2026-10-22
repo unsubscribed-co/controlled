@@ -1,16 +1,27 @@
 package dev.unsubscribed.controlled
 
 import android.app.Application
+import android.graphics.BitmapFactory
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -23,9 +34,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
-/** A one-tap row entry: an app ([id] is its appId) or an input ([id] is its input id). */
-data class Shortcut(val id: String, val label: String, val isInput: Boolean)
-
 /** Where the app is: finding a TV, waiting for Accept, or the remote for the paired one. */
 sealed interface Screen {
     data object Find : Screen
@@ -34,15 +42,37 @@ sealed interface Screen {
 }
 
 /** The remote's link to the paired TV. */
-enum class Link { Connecting, Connected, Waking, Off, CertificateChanged }
+enum class Link { Connecting, Connected, Waking, Off, NoWifi, CertificateChanged }
+
+/** Why pairing didn't happen, for the Find screen. */
+enum class FindError { Unreachable, Rejected, NoAnswer }
+
+/** A press made while the socket was down: sent on reconnect if it's still fresh (see [PressQueue]). */
+private typealias Press = (TvClient, PointerSocket?) -> Unit
+
+/** Presses made while reconnecting: at most [max], none older than [maxAgeMs], so nothing is ever replayed late. */
+class PressQueue<T>(private val max: Int = 5, private val maxAgeMs: Long = 1_000) {
+    private val items = ArrayDeque<Pair<Long, T>>()
+
+    fun add(now: Long, item: T) {
+        items.addLast(now to item)
+        while (items.size > max) items.removeFirst()
+    }
+
+    fun drain(now: Long): List<T> = items.filter { now - it.first <= maxAgeMs }.map { it.second }.also { items.clear() }
+}
+
+/** Waits between reconnect attempts while the app is on screen: fast at first, then every 5 s. */
+fun retryDelay(attempt: Int): Long = listOf(0L, 300L, 1_000L, 2_000L, 4_000L).getOrElse(attempt) { 5_000L }
 
 /**
- * The whole app's state. The socket lives only while the app is on screen ([start]/[stop] from the activity): no service,
- * no background work. Every press is fire-and-forget; a press while not connected starts a reconnect instead.
+ * The whole app's state. The socket lives while the app is on screen and for [GRACE_MS] after it leaves, so locking the
+ * phone or a quick app switch comes back to a live socket; after that it closes: no service, no background work.
  */
 class RemoteModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val http = OkHttpClient()
+    private val cm = app.getSystemService(ConnectivityManager::class.java)
 
     var tv by mutableStateOf(store.load())
         private set
@@ -54,29 +84,78 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         private set
     var muted by mutableStateOf(false)
         private set
-    /** Pairing failed or the typed address didn't answer: shown on the Find screen. */
+    /** The foreground app's id on the TV (what's on now). */
+    var foreground by mutableStateOf<String?>(null)
+        private set
+    /** The TV's own keyboard is up (a text field has focus there): the Type sheet opens by itself. */
+    var tvKeyboard by mutableStateOf(false)
+        private set
     var findError by mutableStateOf<FindError?>(null)
         private set
     val found = mutableStateListOf<FoundTv>()
     var searching by mutableStateOf(false)
         private set
-    val shortcuts = mutableStateListOf<Shortcut>()
+    val apps = mutableStateListOf<TvApp>()
+    val inputs = mutableStateListOf<TvInput>()
+    /** App icons by app id, kept across reconnects (the URLs change every connection, the pictures don't). */
+    val icons = mutableStateMapOf<String, ImageBitmap>()
 
     private var client: TvClient? = null
     private var pointer: PointerSocket? = null
     private var session: Job? = null
     private var search: Job? = null
+    private var grace: Job? = null
+    private var visible = false
+    private val queue = PressQueue<Press>()
 
-    /** The activity is on screen: connect to the paired TV, or search for one. */
-    fun start() {
-        if (screen == Screen.Find) search() else if (tv != null && session?.isActive != true) connect()
+    private val wifi = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            viewModelScope.launch { if (visible && link == Link.NoWifi || link == Link.Off) connect() }
+        }
+
+        override fun onLost(network: Network) {
+            viewModelScope.launch {
+                if (!hasWifi()) {
+                    session?.cancel()
+                    disconnect()
+                    link = Link.NoWifi
+                }
+            }
+        }
     }
 
-    /** The activity left the screen: close everything. */
+    init {
+        cm.registerNetworkCallback(NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), wifi)
+    }
+
+    private fun hasWifi() = cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+
+    /** The activity is on screen: back to a live socket if the grace kept one (checked with a quick probe), else connect. */
+    fun start() {
+        visible = true
+        grace?.cancel()
+        if (screen == Screen.Find) return search()
+        if (tv == null) return
+        val c = client
+        if (c != null && link == Link.Connected) viewModelScope.launch {
+            // Android may have frozen the process in the background: a socket that doesn't answer in 700 ms is gone.
+            val alive = withTimeoutOrNull(700) { runCatching { c.request("audio/getVolume") }.isSuccess } == true
+            log { "resume probe: alive=$alive" }
+            if (!alive && client === c) connect()
+        } else if (session?.isActive != true) connect()
+    }
+
+    /** The activity left the screen: keep the socket for [GRACE_MS], then close everything. */
     fun stop() {
+        visible = false
         search?.cancel()
-        session?.cancel()
-        disconnect()
+        grace?.cancel()
+        grace = viewModelScope.launch {
+            delay(GRACE_MS)
+            session?.cancel()
+            disconnect()
+            link = Link.Connecting
+        }
     }
 
     fun search() {
@@ -103,8 +182,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             try {
                 val pairing = c.connect(clientKey = null, pin = null) { screen = Screen.Pairing(found) }
                 val paired = PairedTv(found.ip, found.name, pairing.clientKey, pairing.pin, macs(c))
-                store.save(paired)
-                tv = paired
+                save(paired)
                 screen = Screen.Remote
                 run(c)
             } catch (e: TvException) {
@@ -132,31 +210,113 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         disconnect()
         store.forget()
         tv = null
-        shortcuts.clear()
+        apps.clear()
+        inputs.clear()
+        icons.clear()
         screen = Screen.Find
         search()
     }
 
+    fun rename(name: String) {
+        val paired = tv ?: return
+        name.trim().takeIf { it.isNotEmpty() }?.let { save(paired.copy(name = it)) }
+    }
+
+    fun togglePin(id: String) {
+        val paired = tv ?: return
+        save(paired.copy(pins = if (id in paired.pins) paired.pins - id else paired.pins + id))
+    }
+
+    /** Takes an app out of Most used by forgetting its launches; returns the count, for Undo. */
+    fun forgetUses(id: String): Int {
+        val paired = tv ?: return 0
+        val count = paired.uses[id] ?: 0
+        save(paired.copy(uses = paired.uses - id))
+        return count
+    }
+
+    fun restoreUses(id: String, count: Int) {
+        val paired = tv ?: return
+        if (count > 0) save(paired.copy(uses = paired.uses + (id to count)))
+    }
+
+    /** Moves a pinned app [by] places (negative: earlier), the accessible alternative to dragging. */
+    fun movePin(id: String, by: Int) {
+        val paired = tv ?: return
+        val pins = paired.pins.toMutableList()
+        val from = pins.indexOf(id).takeIf { it >= 0 } ?: return
+        val to = (from + by).coerceIn(0, pins.lastIndex)
+        pins.add(to, pins.removeAt(from))
+        save(paired.copy(pins = pins))
+    }
+
+    private fun save(paired: PairedTv) {
+        store.save(paired)
+        tv = paired
+    }
+
+    /**
+     * Connects to the paired TV and keeps it connected while the app is on screen: after a drop or a failed attempt it
+     * tries again on [retryDelay]'s schedule, and once looks for the TV at a new address (a DHCP change).
+     */
     fun connect() {
         val paired = tv ?: return
+        if (!hasWifi()) {
+            link = Link.NoWifi
+            return
+        }
         session?.cancel()
         disconnect()
         session = viewModelScope.launch {
-            link = Link.Connecting
-            val c = TvClient(paired.ip, http)
-            try {
-                c.connect(paired.clientKey, paired.pin)
-                run(c)
-            } catch (e: TvException) {
-                c.close()
-                link = if (e.kind == TvException.Kind.CertificateChanged) Link.CertificateChanged else Link.Off
+            var attempt = 0
+            var searched = false
+            if (link != Link.Off) link = Link.Connecting
+            while (true) {
+                val current = tv ?: return@launch
+                val c = TvClient(current.ip, http)
+                try {
+                    c.connect(current.clientKey, current.pin)
+                    attempt = 0
+                    run(c)
+                } catch (e: TvException) {
+                    c.close()
+                    if (e.kind == TvException.Kind.CertificateChanged) {
+                        link = Link.CertificateChanged
+                        return@launch
+                    }
+                    if (attempt >= 1) link = Link.Off
+                    if (attempt >= 2 && !searched) {
+                        searched = true
+                        if (refind(current)) continue
+                    }
+                }
+                if (!visible) return@launch
+                delay(retryDelay(attempt++))
             }
         }
+        if (paired.macs.isEmpty()) log { "no MACs stored: power on unavailable" }
+    }
+
+    /** The TV may have a new address: try every LG TV the search finds with our key; the one that accepts it is ours. */
+    private suspend fun refind(current: PairedTv): Boolean {
+        val candidates = withTimeoutOrNull(3_500) { Ssdp.discover(getApplication(), 3_000).take(8).toList() }
+            ?: return false
+        for (f in candidates.filter { it.ip != current.ip }) {
+            val c = TvClient(f.ip, http)
+            val ok = runCatching { c.connect(current.clientKey, current.pin) }.isSuccess
+            c.close()
+            if (ok) {
+                log { "TV moved: ${current.ip} -> ${f.ip}" }
+                save(current.copy(ip = f.ip))
+                return true
+            }
+        }
+        return false
     }
 
     /**
      * Power on: the magic packet, then a connect attempt every second and the packet again every 10 s, for about 20 s
-     * (measured on Juan's TV: the session was ready 4.6 s after the packet).
+     * (measured on Juan's TV: the session was ready 4.6 s after the packet). Then the normal reconnect loop takes over.
      */
     fun powerOn() {
         val paired = tv ?: return
@@ -175,7 +335,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 try {
                     c.connect(paired.clientKey, paired.pin)
                     run(c)
-                    return@launch
+                    break
                 } catch (e: TvException) {
                     c.close()
                     if (e.kind == TvException.Kind.CertificateChanged) {
@@ -186,53 +346,88 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 delay(1_000)
             }
             link = Link.Off
+            if (visible) connect()
         }
     }
 
-    /** Connected: open the pointer socket, read the rows and the volume, then wait until the socket closes. */
+    /** Connected: flush fresh queued presses, open the pointer socket, read state, then wait until the socket closes. */
     private suspend fun run(c: TvClient) {
         client = c
-        pointer = runCatching { c.pointer() }.getOrNull()
         link = Link.Connected
-        viewModelScope.launch { loadShortcuts(c) }
-        val audio = viewModelScope.launch {
-            runCatching {
-                c.subscribe("audio/getVolume").collect { p ->
-                    val status = p["volumeStatus"]?.jsonObject ?: p
-                    status["volume"]?.jsonPrimitive?.intOrNull?.let { volume = it }
-                    (status["muteStatus"] ?: status["muted"])?.jsonPrimitive?.booleanOrNull?.let { muted = it }
+        val p = runCatching { c.pointer() }.getOrNull()
+        pointer = p
+        queue.drain(System.currentTimeMillis()).forEach { it(c, p) }
+        val watchers = listOf(
+            viewModelScope.launch { loadApps(c) },
+            viewModelScope.launch {
+                runCatching {
+                    c.subscribe("audio/getVolume").collect { payload ->
+                        val status = payload["volumeStatus"]?.jsonObject ?: payload
+                        status["volume"]?.jsonPrimitive?.intOrNull?.let { volume = it }
+                        (status["muteStatus"] ?: status["muted"])?.jsonPrimitive?.booleanOrNull?.let { muted = it }
+                    }
                 }
-            }
-        }
+            },
+            viewModelScope.launch {
+                runCatching {
+                    c.subscribe("com.webos.applicationManager/getForegroundAppInfo").collect { foreground = it.string("appId") }
+                }
+            },
+            viewModelScope.launch {
+                // shortcut: the payload shape of a TV keyboard event isn't measured yet (2026-10-22); currentWidget.focus is
+                // what LG's own apps read. Logged in dev builds until it's confirmed on Juan's TV.
+                runCatching {
+                    c.subscribe("com.webos.service.ime/registerRemoteKeyboard").collect { payload ->
+                        log { "keyboard: $payload" }
+                        payload["currentWidget"]?.jsonObject?.get("focus")?.jsonPrimitive?.booleanOrNull?.let { tvKeyboard = it }
+                    }
+                }
+            },
+        )
         try {
             c.closed.first { it }
         } finally {
-            audio.cancel()
+            watchers.forEach { it.cancel() }
             // A newer session may already own the link: only the current one reports it closed.
             if (client === c) {
                 disconnect()
-                link = Link.Off
+                if (link == Link.Connected) link = Link.Connecting
             }
         }
     }
 
-    private suspend fun loadShortcuts(c: TvClient) {
-        val apps = runCatching { c.request("com.webos.applicationManager/listLaunchPoints") }.getOrNull()
-            ?.get("launchPoints")?.jsonArray.orEmpty().mapNotNull {
+    private suspend fun loadApps(c: TvClient) {
+        runCatching { c.request("com.webos.applicationManager/listLaunchPoints") }.getOrNull()?.let { payload ->
+            val list = payload["launchPoints"]?.jsonArray.orEmpty().mapNotNull {
                 val o = it.jsonObject
                 val id = o.string("id") ?: return@mapNotNull null
-                Shortcut(id, o.string("title") ?: id, isInput = false)
+                TvApp(id, o.string("title") ?: id, o.string("largeIcon") ?: o.string("icon"))
             }
-        // Connected inputs first: on Juan's TV HDMI 1 is empty and HDMI 2 is the PC.
-        val inputs = runCatching { c.request("tv/getExternalInputList") }.getOrNull()
-            ?.get("devices")?.jsonArray.orEmpty().map { it.jsonObject }
-            .sortedByDescending { it["connected"]?.jsonPrimitive?.booleanOrNull == true }
-            .mapNotNull { o ->
+            apps.clear()
+            apps += list
+            // Icons after the list, so the grid shows at once; each arrives on its own. Already cached ones are skipped.
+            for (app in list) {
+                val url = app.icon?.takeIf { it.startsWith("http") } ?: continue
+                if (app.id in icons) continue
+                c.fetch(url)?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { icons[app.id] = it.asImageBitmap() } }
+            }
+        }
+        runCatching { c.request("tv/getExternalInputList") }.getOrNull()?.let { payload ->
+            val list = payload["devices"]?.jsonArray.orEmpty().mapNotNull {
+                val o = it.jsonObject
                 val id = o.string("id") ?: return@mapNotNull null
-                Shortcut(id, o.string("label") ?: id, isInput = true)
+                TvInput(id, o.string("label") ?: id, o.string("appId"), o["connected"]?.jsonPrimitive?.booleanOrNull == true)
             }
-        shortcuts.clear()
-        shortcuts += inputs + apps
+            // Connected first: on Juan's TV HDMI 1 is empty and HDMI 2 is the PC.
+            inputs.clear()
+            inputs += list.sortedByDescending { it.connected }
+        }
+    }
+
+    /** What's on now, as the person knows it: the app's or input's name. Null when unknown. */
+    fun foregroundName(): String? {
+        val id = foreground ?: return null
+        return apps.firstOrNull { it.id == id }?.title ?: inputs.firstOrNull { it.appId == id }?.label
     }
 
     /** Wake-on-LAN targets: every MAC the TV reports (which interface is live isn't said, so both). */
@@ -246,16 +441,26 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         pointer = null
         client?.close()
         client = null
+        tvKeyboard = false
     }
 
-    // Presses. Each returns quietly when there's no socket: the screen shows the link state and how to reconnect.
+    // Presses. Without a socket they queue (fresh ones are sent on reconnect) and start a reconnect.
 
-    fun button(name: String) {
-        if (pointer?.button(name) != true) reconnect()
+    private fun press(action: Press) {
+        val c = client
+        if (c != null && link == Link.Connected) return action(c, pointer)
+        queue.add(System.currentTimeMillis(), action)
+        if (link == Link.Off || link == Link.Connected) connect()
     }
 
-    fun request(uri: String, payload: JsonObject = JsonObject(emptyMap())) {
-        val c = client ?: return reconnect()
+    fun button(name: String) = press { c, p ->
+        // The pointer socket can drop alone: reopen it and send the press there.
+        if (p?.button(name) != true) viewModelScope.launch {
+            runCatching { c.pointer() }.getOrNull()?.let { fresh -> pointer = fresh; fresh.button(name) }
+        }
+    }
+
+    fun request(uri: String, payload: JsonObject = JsonObject(emptyMap())) = press { c, _ ->
         viewModelScope.launch { runCatching { c.request(uri, payload) } }
     }
 
@@ -269,14 +474,24 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
     // The TV answers turnOff unreliably as it shuts down, so don't wait for it.
     fun powerOff() {
-        client?.fire("system/turnOff") ?: return
+        client?.fire("system/turnOff")
     }
 
-    fun open(s: Shortcut) =
-        if (s.isInput) request("tv/switchInput", buildJsonObject { put("inputId", s.id) })
-        else request("system.launcher/launch", buildJsonObject { put("id", s.id) })
+    fun launch(app: TvApp) {
+        request("system.launcher/launch", buildJsonObject { put("id", app.id) })
+        tv?.let { save(it.copy(uses = it.uses + (app.id to (it.uses[app.id] ?: 0) + 1))) }
+    }
 
-    fun type(text: String) = request("com.webos.service.ime/insertText", buildJsonObject { put("text", text); put("replace", 0) })
+    fun switchInput(input: TvInput) = request("tv/switchInput", buildJsonObject { put("inputId", input.id) })
+
+    /** Live typing: the TV's field follows the phone's, as the smallest delete-then-insert from [before] to [after]. */
+    fun typeChange(before: String, after: String) {
+        val common = before.commonPrefixWith(after).length
+        val deletes = before.length - common
+        if (deletes > 0) request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", deletes) })
+        if (after.length > common) request("com.webos.service.ime/insertText", buildJsonObject { put("text", after.substring(common)); put("replace", 0) })
+    }
+
     fun enter() = request("com.webos.service.ime/sendEnterKey")
     fun delete() = request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", 1) })
 
@@ -284,23 +499,22 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         pointer?.move(dx, dy)
     }
 
-    fun click() {
-        if (pointer?.click() != true) reconnect()
-    }
+    fun click() = press { _, p -> p?.click() }
 
     fun scroll(dx: Int, dy: Int) {
         pointer?.scroll(dx, dy)
     }
 
-    /** A press found no socket: reconnect, unless that's already under way or needs the person (a changed certificate). */
-    private fun reconnect() {
-        if (link == Link.Off || link == Link.Connected) connect()
+    override fun onCleared() {
+        cm.unregisterNetworkCallback(wifi)
+        session?.cancel()
+        disconnect()
     }
 
-    override fun onCleared() = stop()
+    private companion object {
+        /** How long the socket outlives the screen: covers locking the phone and a quick app switch. */
+        const val GRACE_MS = 30_000L
+    }
 }
-
-/** Why pairing didn't happen, for the Find screen. */
-enum class FindError { Unreachable, Rejected, NoAnswer }
 
 private fun JsonObject.string(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull

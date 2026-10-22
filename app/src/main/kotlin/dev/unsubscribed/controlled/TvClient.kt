@@ -63,6 +63,9 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
     private var openedWith: OkHttpClient? = null
     @Volatile
     private var secure = true
+    /** The pinned TLS client, kept even on the ws fallback: the TV serves app icons on https://<ip>:3001. */
+    @Volatile
+    private var iconClient: OkHttpClient? = null
 
     /**
      * Opens the socket and registers. [clientKey] and [pin] come from storage (null the first time).
@@ -74,6 +77,8 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
         if (_closed.value) {
             throw TvException(TvException.Kind.Closed, "Client has already been closed")
         }
+        val t0 = System.nanoTime()
+        fun ms() = (System.nanoTime() - t0) / 1_000_000
 
         val trustManager = TvTrustManager(pin)
         val sslContext = SSLContext.getInstance("TLS").apply {
@@ -89,6 +94,7 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
 
         var activeSocket: WebSocket? = null
         var activePin: String? = null
+        iconClient = secureClient
 
         try {
             activeSocket = openSocketBridge("wss://$ip:3001", secureClient)
@@ -132,6 +138,7 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
         }
 
         socket = activeSocket
+        log { "connect: socket open ${ms()} ms (secure=$secure)" }
 
         // Step 1: Hello handshake
         val helloDeferred = CompletableDeferred<JsonObject>()
@@ -158,8 +165,10 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
             throw if (e is TvException) e else TvException(TvException.Kind.Closed, "Hello failed", e)
         }
 
+        log { "connect: hello ${ms()} ms" }
         // aiowebostv asks for system info before registering: newer webOS versions want it. Its answer doesn't matter.
         runCatching { request("system/getSystemInfo") }
+        log { "connect: systemInfo ${ms()} ms" }
 
         // Step 2: Register exchange
         val registerChannel = Channel<JsonObject>(Channel.UNLIMITED)
@@ -213,6 +222,7 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
                 throw TvException(TvException.Kind.Failed, "Unexpected response type for register: $firstType")
             }
 
+            log { "connect: registered ${ms()} ms" }
             return Pairing(clientKey = resolvedKey, pin = activePin)
         } catch (t: Throwable) {
             activeSocket.cancel()
@@ -349,6 +359,14 @@ class TvClient(private val ip: String, private val base: OkHttpClient) {
         }
 
         return PointerSocket(pointerWebSocket)
+    }
+
+    /** An app icon: the TV serves them on the pinned port, under a token that's only valid for this connection. */
+    suspend fun fetch(url: String): ByteArray? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val client = iconClient ?: return@withContext null
+        runCatching {
+            client.newCall(Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body.bytes() else null }
+        }.getOrNull()
     }
 
     fun close() {
