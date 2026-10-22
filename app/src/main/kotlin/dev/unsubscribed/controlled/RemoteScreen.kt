@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -138,6 +139,7 @@ fun RemoteScreen(model: RemoteModel) {
 private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
+    val uri = LocalUriHandler.current
     val live = model.link == Link.Connected
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -153,6 +155,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit) {
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem({ Text(t.rename) }, { menu = false; onRename() }, leadingIcon = { Icon(painterResource(R.drawable.sym_tv), null) })
                 DropdownMenuItem({ Text(t.forgetTv) }, { menu = false; model.forget() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })
+                DropdownMenuItem({ Text(t.privacy) }, { menu = false; uri.openUri(BuildConfig.PRIVACY_URL) })
             }
         }
     }

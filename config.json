@@ -1,4 +1,5 @@
 {
+  "privacyUrl": "https://unsubscribed.dev/controlled/privacy/",
   "prod": { "homeUrl": "https://unsubscribed.dev/controlled" },
   "dev": {
     "homeUrl": "https://dev.unsubscribed.dev/controlled",

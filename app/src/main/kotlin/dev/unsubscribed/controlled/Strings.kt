@@ -40,6 +40,7 @@ interface Strings {
     fun nowOn(name: String): String
     val certificateChanged: String
     val forgetTv: String
+    val privacy: String
     val rename: String
     val renameTitle: String
     val tvName: String
@@ -136,6 +137,7 @@ object En : Strings {
     override fun nowOn(name: String) = "On now: $name"
     override val certificateChanged = "This TV's security certificate changed. If you replaced or reset the TV, forget it and pair again."
     override val forgetTv = "Forget this TV"
+    override val privacy = "Privacy policy"
     override val rename = "Rename"
     override val renameTitle = "Name this TV"
     override val tvName = "TV name"
@@ -231,6 +233,7 @@ object Es : Strings {
     override fun nowOn(name: String) = "Ahora: $name"
     override val certificateChanged = "El certificado de seguridad de este televisor cambió. Si reemplazaste o restableciste el TV, olvídalo y vincúlalo de nuevo."
     override val forgetTv = "Olvidar este TV"
+    override val privacy = "Política de privacidad"
     override val rename = "Cambiar nombre"
     override val renameTitle = "Nombra este TV"
     override val tvName = "Nombre del TV"

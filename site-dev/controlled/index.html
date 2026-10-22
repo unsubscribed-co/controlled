@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-es="Controlled Dev">Controlled Dev</title>
+<script src="/controlled/lang.js"></script>
+<link rel="icon" href="/controlled/icon.png">
+<style>
+  :root {
+    --bg: #f7f4f0; --fg: #1c1a17; --muted: #5c5852; --line: #e2dcd5; --accent: #b83a12; --panel: #efeae4; --btn: #b83a12;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0e11; --fg: #f2eee9; --muted: #b9b4ae; --line: #24262c; --accent: #ff6a3d; --panel: #17181d; --btn: #ff6a3d; }
+  }
+  html[data-lang="es"] .en, html:not([data-lang="es"]) .es { display: none !important; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  .top { display: flex; justify-content: space-between; gap: 1rem; font-size: .9rem; color: var(--muted); margin: 0; }
+  .top a { color: inherit; }
+  h1 { font-size: clamp(1.9rem, 7vw, 2.6rem); line-height: 1.1; letter-spacing: -0.03em; margin: .5rem 0 .25rem; }
+  .date { color: var(--muted); margin: 0 0 2rem; }
+  h2 { font-size: 1.2rem; margin: 2.25rem 0 .5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+  p, ul, ol { margin: 0 0 1rem; }
+  li { margin: .35rem 0; }
+  a { color: var(--accent); text-underline-offset: .2em; }
+  .summary { background: var(--panel); border-radius: .75rem; padding: 1rem 1.25rem; }
+  .summary ul { margin: 0; padding-left: 1.2rem; }
+  .hero { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0 1rem; }
+  .hero img { width: 4.5rem; height: 4.5rem; border-radius: 22%; flex: none; }
+  .lead { font-size: 1.15rem; margin: 0 0 1.5rem; }
+  .download { display: block; text-align: center; background: var(--btn); color: var(--bg); padding: 1rem; border-radius: .9rem;
+    text-decoration: none; font-size: 1.15rem; font-weight: 600; }
+  .download:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+  .note { font-size: .9rem; color: var(--muted); margin: .5rem 0 0; text-align: center; }
+  footer { margin-top: 2.5rem; font-size: .9rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="top"><span><a href="/">Unsubscribed!</a> / Controlled Dev</span>
+  <a class="en" href="?lang=es" lang="es">Español</a><a class="es" href="?lang=en" lang="en">English</a></p>
+<div class="hero">
+  <img src="/controlled/icon.png" alt="">
+  <h1>Controlled Dev</h1>
+</div>
+<div class="en" lang="en">
+<p class="lead">The test build of Controlled, updated on every change. It installs next to the Google Play version.</p>
+<a class="download" href="/controlled/Controlled.apk">Download the APK</a>
+<p class="note">Android 8 or newer. Allow installs from your browser when Android asks.</p>
+</div>
+<div class="es" lang="es">
+<p class="lead">La versión de prueba de Controlled, actualizada con cada cambio. Se instala junto a la versión de Google Play.</p>
+<a class="download" href="/controlled/Controlled.apk">Descargar el APK</a>
+<p class="note">Android 8 o más nuevo. Permite instalar desde tu navegador cuando Android lo pida.</p>
+</div>
+</main>
+</body>
+</html>

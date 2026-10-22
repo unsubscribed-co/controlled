@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-es="Controlled">Controlled</title>
+<script src="/controlled/lang.js"></script>
+<meta name="description" content="A remote for your LG TV. No ads, no account, nothing leaves your home. Android.">
+<link rel="icon" href="/controlled/icon.png">
+<style>
+  :root {
+    --bg: #f7f4f0; --fg: #1c1a17; --muted: #5c5852; --line: #e2dcd5; --accent: #b83a12; --panel: #efeae4; --btn: #b83a12;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0e11; --fg: #f2eee9; --muted: #b9b4ae; --line: #24262c; --accent: #ff6a3d; --panel: #17181d; --btn: #ff6a3d; }
+  }
+  html[data-lang="es"] .en, html:not([data-lang="es"]) .es { display: none !important; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  .top { display: flex; justify-content: space-between; gap: 1rem; font-size: .9rem; color: var(--muted); margin: 0; }
+  .top a { color: inherit; }
+  h1 { font-size: clamp(1.9rem, 7vw, 2.6rem); line-height: 1.1; letter-spacing: -0.03em; margin: .5rem 0 .25rem; }
+  .date { color: var(--muted); margin: 0 0 2rem; }
+  h2 { font-size: 1.2rem; margin: 2.25rem 0 .5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+  p, ul, ol { margin: 0 0 1rem; }
+  li { margin: .35rem 0; }
+  a { color: var(--accent); text-underline-offset: .2em; }
+  .summary { background: var(--panel); border-radius: .75rem; padding: 1rem 1.25rem; }
+  .summary ul { margin: 0; padding-left: 1.2rem; }
+  .hero { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0 1rem; }
+  .hero img { width: 4.5rem; height: 4.5rem; border-radius: 22%; flex: none; }
+  .lead { font-size: 1.15rem; margin: 0 0 1.5rem; }
+  .download { display: block; text-align: center; background: var(--btn); color: var(--bg); padding: 1rem; border-radius: .9rem;
+    text-decoration: none; font-size: 1.15rem; font-weight: 600; }
+  .download:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+  .note { font-size: .9rem; color: var(--muted); margin: .5rem 0 0; text-align: center; }
+  footer { margin-top: 2.5rem; font-size: .9rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="top"><span><a href="/">Unsubscribed!</a> / Controlled</span>
+  <a class="en" href="?lang=es" lang="es">Español</a><a class="es" href="?lang=en" lang="en">English</a></p>
+<div class="hero">
+  <img src="/controlled/icon.png" alt="">
+  <h1>Controlled</h1>
+</div>
+<div class="en" lang="en">
+<p class="lead">A remote for your LG TV on your phone: the d-pad, volume, your apps, a keyboard and a touchpad. It talks only to your TV, over your home Wi-Fi.</p>
+<a class="download" href="https://play.google.com/apps/internaltest/4701348647558366115">Get it on Google Play</a>
+<p class="note">Free. No ads, no account. Android.</p>
+<h2>How to install</h2>
+<p>Controlled is in a private test on Google Play, so the button works only once your Google email is on the testers list.
+Write to <a href="mailto:jcrubioa2@gmail.com">jcrubioa2@gmail.com</a> with your Google email.</p>
+<ol>
+  <li>Tap <b>Get it on Google Play</b>, signed in with the same Google account as your Play Store, and tap <b>Accept invite</b>.</li>
+  <li>Install it from Google Play.</li>
+  <li>Open Controlled with your phone on the same Wi-Fi as your TV, pick your TV and choose <b>Accept</b> on the TV.</li>
+</ol>
+<footer><a href="/controlled/privacy/">Privacy policy</a> <a href="https://github.com/unsubscribed-co/controlled">Source code</a></footer>
+</div>
+<div class="es" lang="es">
+<p class="lead">Un control remoto para tu TV LG en tu celular: flechas, volumen, tus apps, un teclado y un touchpad. Solo habla con tu TV, por el Wi-Fi de tu casa.</p>
+<a class="download" href="https://play.google.com/apps/internaltest/4701348647558366115">Descárgalo en Google Play</a>
+<p class="note">Gratis. Sin anuncios ni cuentas. Android.</p>
+<h2>Cómo instalarlo</h2>
+<p>Controlled está en una prueba privada en Google Play, así que el botón solo funciona cuando tu correo de Google está en la lista
+de la prueba. Escribe a <a href="mailto:jcrubioa2@gmail.com">jcrubioa2@gmail.com</a> con tu correo de Google.</p>
+<ol>
+  <li>Toca <b>Descárgalo en Google Play</b> con la misma cuenta de Google de tu Play Store, y toca <b>Aceptar invitación</b>.</li>
+  <li>Instálalo desde Google Play.</li>
+  <li>Abre Controlled con tu celular en el mismo Wi-Fi de tu TV, elige tu TV y elige <b>Aceptar</b> en el TV.</li>
+</ol>
+<footer><a href="/controlled/privacy/">Política de privacidad</a> <a href="https://github.com/unsubscribed-co/controlled">Código fuente</a></footer>
+</div>
+</main>
+</body>
+</html>
