@@ -140,7 +140,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
-    val live = model.link == Link.Connected
+    val live = model.link == Link.Connected && !model.asleep
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(tv.name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -175,16 +175,19 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         delay(400)
         slow = true
     }
+    // Connected to a TV in standby (Quick Start+ keeps its socket open) reads as off, with Turn on a tap away.
+    val sleeping = model.link == Link.Connected && model.asleep
     val text = when (model.link) {
-        Link.Connected -> model.foregroundName()?.let { t.nowOn(it) }
+        Link.Connected -> if (sleeping) t.tvOff else model.foregroundName()?.let { t.nowOn(it) }
         Link.Connecting -> if (slow) t.connecting else null
         Link.Waking -> t.turningOn
-        Link.Off -> if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
+        Link.Off -> if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
         Link.NoWifi -> t.noWifi
         Link.CertificateChanged -> null
     }
-    val tap: (() -> Unit)? = when (model.link) {
-        Link.Off -> if (tv.macs.isNotEmpty()) model::powerOn else model::connect
+    val tap: (() -> Unit)? = when {
+        sleeping -> model::powerOn
+        model.link == Link.Off -> if (tv.macs.isNotEmpty()) model::powerOn else model::connect
         else -> null
     }
     val breathing = model.link == Link.Waking || (model.link == Link.Connecting && slow)
@@ -199,13 +202,14 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
     ) {
         val dot = Modifier.size(8.dp).alpha(pulse).clip(CircleShape)
         when (model.link) {
-            Link.Connected, Link.Connecting, Link.Waking -> Box(dot.background(colors.primary))
+            Link.Connected -> if (sleeping) Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape)) else Box(dot.background(colors.primary))
+            Link.Connecting, Link.Waking -> Box(dot.background(colors.primary))
             Link.Off, Link.NoWifi -> Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
             Link.CertificateChanged -> Box(dot.border(1.5.dp, colors.error, CircleShape))
         }
         text?.let {
             Spacer(Modifier.width(8.dp))
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }

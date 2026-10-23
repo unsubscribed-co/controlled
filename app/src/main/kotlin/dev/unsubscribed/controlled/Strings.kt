@@ -37,6 +37,8 @@ interface Strings {
     val tvOff: String
     val tvOffNoPower: String
     val noWifi: String
+    /** Turn on timed out: where LG keeps the setting that lets the TV wake from the phone. */
+    val wakeHint: String
     fun nowOn(name: String): String
     val certificateChanged: String
     val forgetTv: String
@@ -137,6 +139,7 @@ object En : Strings {
     override val tvOff = "TV is off. Tap to turn on"
     override val tvOffNoPower = "TV is off or out of reach. Tap to retry"
     override val noWifi = "No Wi-Fi. Connect to your home Wi-Fi"
+    override val wakeHint = "The TV didn't wake. On the TV, turn on Settings > General > Devices > Mobile TV On > Turn on via Wi-Fi"
     override fun nowOn(name: String) = "On now: $name"
     override val certificateChanged = "This TV's security certificate changed. If you replaced or reset the TV, forget it and pair again."
     override val forgetTv = "Forget this TV"
@@ -236,6 +239,7 @@ object Es : Strings {
     override val tvOff = "El TV está apagado. Toca para encender"
     override val tvOffNoPower = "El TV está apagado o fuera de alcance. Toca para reintentar"
     override val noWifi = "Sin Wi-Fi. Conéctate al Wi-Fi de tu casa"
+    override val wakeHint = "El TV no encendió. En el TV, activa Configuración > General > Dispositivos > Encender TV con móvil > Encender por Wi-Fi"
     override fun nowOn(name: String) = "Ahora: $name"
     override val certificateChanged = "El certificado de seguridad de este televisor cambió. Si reemplazaste o restableciste el TV, olvídalo y vincúlalo de nuevo."
     override val forgetTv = "Olvidar este TV"

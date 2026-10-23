@@ -30,8 +30,9 @@ object WakeOnLan {
         val targets = listOfNotNull(wifiBroadcast(context), InetAddress.getByName("255.255.255.255"))
         DatagramSocket().use { socket ->
             socket.broadcast = true
+            log { "wake: macs=$macs targets=$targets" }
             for (packet in macs.mapNotNull(::packet)) for (target in targets) {
-                runCatching { socket.send(DatagramPacket(packet, packet.size, target, 9)) }
+                runCatching { socket.send(DatagramPacket(packet, packet.size, target, 9)) }.onFailure { log { "wake to $target failed: $it" } }
             }
         }
     }

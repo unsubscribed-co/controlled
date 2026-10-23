@@ -87,6 +87,17 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** The foreground app's id on the TV (what's on now). */
     var foreground by mutableStateOf<String?>(null)
         private set
+    /**
+     * The TV's own power state (getPowerState), null until known. With Quick Start+ an LG keeps its socket open in standby
+     * ("Active Standby", "Suspend"), so connected doesn't mean on; "Screen Off" is on with the picture off (aiowebostv's reading).
+     */
+    var powerState by mutableStateOf<String?>(null)
+        private set
+    /** The last Turn on timed out: the TV likely ignores Wake-on-LAN after a while off unless its setting is on. */
+    var wakeFailed by mutableStateOf(false)
+        private set
+    /** Connected, but the TV is in standby or its screen is off: the remote offers Turn on. */
+    val asleep get() = powerState in ASLEEP
     /** The TV's own keyboard is up (a text field has focus there): the Type sheet opens by itself. */
     var tvKeyboard by mutableStateOf(false)
         private set
@@ -322,10 +333,21 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      */
     fun powerOn() {
         val paired = tv ?: return
+        val c = client
+        if (c != null && link == Link.Connected) {
+            // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
+            viewModelScope.launch {
+                WakeOnLan.send(getApplication(), paired.macs)
+                val uri = if (powerState == "Screen Off") "com.webos.service.tvpower/power/turnOnScreen" else "system/turnOn"
+                runCatching { c.request(uri) }.onSuccess { log { "$uri: $it" } }.onFailure { log { "$uri failed: $it" } }
+            }
+            return
+        }
         session?.cancel()
         disconnect()
         session = viewModelScope.launch {
             link = Link.Waking
+            wakeFailed = false
             val started = System.currentTimeMillis()
             var lastPacket = 0L
             while (System.currentTimeMillis() - started < 20_000) {
@@ -348,6 +370,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 delay(1_000)
             }
             link = Link.Off
+            wakeFailed = client == null
             if (visible) connect()
         }
     }
@@ -374,6 +397,14 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 runCatching {
                     c.subscribe("com.webos.applicationManager/getForegroundAppInfo").collect { foreground = it.string("appId") }
+                }
+            },
+            viewModelScope.launch {
+                runCatching {
+                    c.subscribe("com.webos.service.tvpower/power/getPowerState").collect { payload ->
+                        log { "power: $payload" }
+                        payload.string("state")?.let { powerState = it }
+                    }
                 }
             },
             viewModelScope.launch {
@@ -445,6 +476,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         client?.close()
         client = null
         tvKeyboard = false
+        powerState = null
     }
 
     // Presses. Without a socket they queue (fresh ones are sent on reconnect) and start a reconnect.
@@ -537,6 +569,9 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /** Power states that mean the TV looks off to the person (aiowebostv's is_on / is_screen_on). */
+        val ASLEEP = setOf("Power Off", "Suspend", "Active Standby", "Screen Off")
+
         /** How long the socket outlives the screen: covers locking the phone and a quick app switch. */
         const val GRACE_MS = 30_000L
     }
