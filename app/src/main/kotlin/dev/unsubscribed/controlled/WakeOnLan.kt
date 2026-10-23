@@ -10,7 +10,11 @@ import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
 
-/** Power on: the magic packet to each of the TV's MACs, on the Wi-Fi's subnet broadcast and 255.255.255.255, UDP 9. */
+/**
+ * Power on: the magic packet to each of the TV's MACs, sent straight to the TV's last address and on the Wi-Fi's subnet
+ * broadcast and 255.255.255.255, UDP 9. Some routers don't pass broadcasts to a Wi-Fi TV asleep in power save; a packet
+ * addressed to it still gets there.
+ */
 object WakeOnLan {
     /** 6 × 0xFF then the MAC 16 times: 102 bytes. Null for anything that isn't 6 hex pairs. */
     fun packet(mac: String): ByteArray? {
@@ -26,8 +30,8 @@ object WakeOnLan {
         return InetAddress.getByAddress(byteArrayOf((b ushr 24).toByte(), (b ushr 16).toByte(), (b ushr 8).toByte(), b.toByte()))
     }
 
-    suspend fun send(context: Context, macs: List<String>) = withContext(Dispatchers.IO) {
-        val targets = listOfNotNull(wifiBroadcast(context), InetAddress.getByName("255.255.255.255"))
+    suspend fun send(context: Context, macs: List<String>, ip: String) = withContext(Dispatchers.IO) {
+        val targets = listOfNotNull(runCatching { InetAddress.getByName(ip) }.getOrNull(), wifiBroadcast(context), InetAddress.getByName("255.255.255.255"))
         DatagramSocket().use { socket ->
             socket.broadcast = true
             log { "wake: macs=$macs targets=$targets" }

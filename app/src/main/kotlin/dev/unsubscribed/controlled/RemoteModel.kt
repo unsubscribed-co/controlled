@@ -337,7 +337,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         if (c != null && link == Link.Connected) {
             // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
             viewModelScope.launch {
-                WakeOnLan.send(getApplication(), paired.macs)
+                WakeOnLan.send(getApplication(), paired.macs, paired.ip)
                 val uri = if (powerState == "Screen Off") "com.webos.service.tvpower/power/turnOnScreen" else "system/turnOn"
                 runCatching { c.request(uri) }.onSuccess { log { "$uri: $it" } }.onFailure { log { "$uri failed: $it" } }
             }
@@ -352,7 +352,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             var lastPacket = 0L
             while (System.currentTimeMillis() - started < 20_000) {
                 if (System.currentTimeMillis() - lastPacket >= 10_000) {
-                    WakeOnLan.send(getApplication(), paired.macs)
+                    WakeOnLan.send(getApplication(), paired.macs, paired.ip)
                     lastPacket = System.currentTimeMillis()
                 }
                 val c = TvClient(paired.ip, http)
