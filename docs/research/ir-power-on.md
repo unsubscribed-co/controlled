@@ -20,7 +20,6 @@ WoL + SSAP — so it can't wake a TV past the ~1 h Wake-on-LAN window (same ceil
 Phone: POCO X7 Pro has an emitter (emitter on the top edge); `ir power ... emitter=true sent=true` confirmed, and a
 third-party IR remote app powers Juan's 70UP7500PSC on, so IR → this TV works.
 
-## Not yet verified
-Whether **our** NEC codes (`0x20DF23DC` / `0x20DF10EF`) wake this TV — only that another app's IR does. The LG codes are
-standard and high-confidence, but confirm before shipping: clear the wake key (so `irWake` fires) and tap Turn on at the
-TV, or dev-trigger `am start ... --es ir_power on|toggle|<hex>` with the phone aimed. Keep whichever code wakes it.
+## Verified on hardware (2026-10-26, dev.24-ir)
+`LG_POWER_ON = 0x20DF23DC` (NEC discrete power-on, 38 kHz) **woke Juan's 70UP7500PSC** — screen on ~6 s after the IR
+fired, over Wi-Fi adb with the phone's top edge aimed at the TV. `emitter=true sent=true`. Shipped in 1.4.
