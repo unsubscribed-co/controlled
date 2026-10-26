@@ -66,10 +66,27 @@ class MainActivity : ComponentActivity() {
     private fun shared(intent: Intent?) {
         // Dev experiment (docs/research/lg-power-on.md): adb shell am start -n <dev app>/<activity> --es ble_wake <16 hex digits>
         if (BuildConfig.LOG) intent?.getStringExtra("ble_wake")?.let { p ->
-            val tv = model.tv?.macs?.firstOrNull()?.let(BleWake::bluetoothAddress)
+            val tvWifi = model.tv?.macs?.firstOrNull() ?: intent.getStringExtra("tv_mac") // dev app may be unpaired
+            val tv = tvWifi?.let(BleWake::bluetoothAddress)
             val prefix = BleWake.hex(p)
             val sent = tv != null && prefix != null && BleWake.send(this, prefix, tv)
             log { "ble wake prefix=$p tv=${tv?.joinToString(":") { "%02x".format(it) }} sent=$sent" }
+        }
+        // Dev experiment (docs/research/lg-ble-registration.md): --es gatt_probe 1 then --es gatt_write <hex frame>
+        if (BuildConfig.LOG) intent?.getStringExtra("gatt_probe")?.let { arg ->
+            // arg "1" = use the paired TV; otherwise arg is the TV's Wi-Fi MAC (dev app may be unpaired).
+            val wifiMac = if (arg == "1") model.tv?.macs?.firstOrNull() else arg
+            val mac = wifiMac?.let(BleWake::bluetoothAddress)?.joinToString(":") { "%02x".format(it) }
+            log { "gatt probe mac=$mac started=${mac != null && GattWake.probe(this, mac)}" }
+        }
+        if (BuildConfig.LOG) intent?.getStringExtra("gatt_scan")?.let {
+            log { "gatt scan started=${GattWake.scanAndProbe(this)}" }
+        }
+        if (BuildConfig.LOG) intent?.getStringExtra("gatt_read")?.let { u ->
+            log { "gatt read $u requested=${GattWake.read(u)}" }
+        }
+        if (BuildConfig.LOG) intent?.getStringExtra("gatt_write")?.let { h ->
+            log { "gatt write ${h}: ${BleWake.hex(h)?.let { GattWake.write(it) }}" }
         }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)

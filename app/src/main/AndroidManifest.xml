@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Turning the TV on over Bluetooth LE, as LG ThinQ does (BleWake.kt). -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- dev only (GattWake experiment): GATT connect + scan for the TV; granted by adb -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
 
     <application
         android:allowBackup="false"
