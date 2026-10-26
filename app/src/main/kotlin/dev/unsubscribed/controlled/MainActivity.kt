@@ -71,6 +71,15 @@ class MainActivity : ComponentActivity() {
             val sent = tv != null && prefix != null && BleWake.send(this, prefix, tv)
             log { "ble wake prefix=$p tv=${tv?.joinToString(":") { "%02x".format(it) }} sent=$sent" }
         }
+        // Dev experiment (docs/research/ir-power-on.md): --es ir_power on|toggle|<8 hex> — aim the phone at the TV.
+        if (BuildConfig.LOG) intent?.getStringExtra("ir_power")?.let { a ->
+            val code = when (a) {
+                "on" -> IrWake.LG_POWER_ON
+                "toggle" -> IrWake.LG_POWER_TOGGLE
+                else -> a.toLongOrNull(16)?.toInt()
+            }
+            log { "ir power arg=$a emitter=${IrWake.hasEmitter(this)} sent=${code != null && IrWake.powerOn(this, code)}" }
+        }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
         val ok = model.tv != null && model.share(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())

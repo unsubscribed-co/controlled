@@ -346,6 +346,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun powerOn() {
         val paired = tv ?: return
         bleWake(paired)
+        irWake(paired)
         val c = client
         if (c != null && link == Link.Connected) {
             // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
@@ -398,6 +399,16 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         val app = getApplication<Application>()
         if (Build.VERSION.SDK_INT >= 31 && app.checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) return
         log { "ble wake sent=${BleWake.send(app, key, tv)}" }
+    }
+
+    /**
+     * Second to Bluetooth: when no wake key is set and the phone has an IR blaster, Turn on also sends LG's IR power
+     * code, which reaches the TV from any state like its own remote — but only line of sight, so aim the phone (IrWake.kt).
+     */
+    private fun irWake(paired: PairedTv) {
+        if (paired.bleKey?.let(BleWake::hex) != null) return // Bluetooth wake is set up and is hands-off; prefer it.
+        val app = getApplication<Application>()
+        if (IrWake.hasEmitter(app)) log { "ir power sent=${IrWake.powerOn(app)}" }
     }
 
     /** Connected: flush fresh queued presses, open the pointer socket, read state, then wait until the socket closes. */

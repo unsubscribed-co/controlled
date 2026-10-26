@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Turning the TV on over Bluetooth LE, as LG ThinQ does (BleWake.kt). -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- Turning the TV on with the phone's IR blaster, when it has one (IrWake.kt). -->
+    <uses-permission android:name="android.permission.TRANSMIT_IR" />
+    <uses-feature android:name="android.hardware.consumerir" android:required="false" />
 
     <application
         android:allowBackup="false"
