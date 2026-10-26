@@ -45,8 +45,8 @@ LE Set Ext Adv Enable  on, then off 10 s later
 | 2026-10-26 11:29:04 | `0a 1b 2c 3d 4e 5f 07 00` | deep sleep (no ARP for 26 min) |
 | 2026-10-26 11:43:36 | `0a 1b 2c 3d 4e 5f 07 00` | light sleep (off 6 min); TV on 6 s after the tap |
 
-**The bytes don't change between wakes (same phone, same TV):** it isn't a rolling code. Still unknown: whether they depend
-on the phone, the ThinQ account or the TV, and whether the TV checks them at all.
+**The bytes don't change between wakes (same phone, same TV):** it isn't a rolling code. (Resolved below by
+decompiling ThinQ: the 8 bytes are not a key — they are ThinQ's self-assigned random MAC plus a 2-byte header.)
 
 ThinQ only sends the advertisement right after the app is (re)opened. Later taps on the device list's power button,
 greyed out by then, send nothing, and the TV stays off (11:38:24). That explains "the power button is often
@@ -82,11 +82,61 @@ The TV advertises from a random address (`4c:ae:ee:33:cb:e7` in this log):
 08 1b 00 d5 d0 61 da ce a4      LE Bluetooth Device Address: public a4:ce:da:61:d0:d5 (confirms Wi-Fi MAC + 1)
 ```
 
-The 8 wake bytes aren't in it. **Most likely they're a key shared when ThinQ registered the TV, so they differ per TV
-and owner.** Open questions:
-- Does the key depend on the phone? Test: send the same bytes from another device, such as the PC's Bluetooth.
-- Can it be derived from the TV's `03 34 15 13 17 fd 80`, or read from the TV over SSAP?
-- Is it reset by re-registering in ThinQ?
+The 8 wake bytes aren't in it. (Earlier guess — "a key shared when ThinQ registered the TV" — was half right: the
+*TV's* address is from registration, but the leading bytes are the phone's self-assigned identity. See below.)
+
+## Where the 8 bytes come from: solved by decompiling ThinQ (2026-10-26)
+
+Decompiled LG ThinQ (`com.lgeha.nuts`, pulled over adb, disassembled with Android `dexdump`). The wake advertisement
+is built by `com.lge.lms.things.service.smarttv.connectsdk.ConnectSdkHandler.powerOnBLEWakeup(...)`:
+
+```
+targetAddress = macBytes( NetworkManager.getAddress(BT) )          // the PHONE's identity (see below)
+info = new LeccpControlAdvertisingInfo(targetAddress)
+info.addControlData(controlId = 0x00, macBytes(device."registered_bt_address"))   // the TV's BT addr, stored at registration
+AdvertiseManager.startAdvertise(BLE, info.getBytes())              // company 0x00C4, service 0xFEBA
+```
+
+`LeccpControlAdvertisingInfo.getBytes()` serialises as `targetAddress ++ [byteSize][controlId][controlData]`. So the
+14-byte manufacturer payload decodes as:
+
+| bytes | value (this phone+TV) | meaning |
+|---|---|---|
+| `0a 1b 2c 3d 4e 5f` | ThinQ's stored random MAC | `targetAddress` = `NetworkManager.getAddress(BT)` |
+| `07 00` | len `0x07` (captured), controlId `0x00` | control-block header (the code reads as `controlData.length + 2` = 8; the captures and the working replay say 7) |
+| `a4 ce da 61 d0 d5` | the TV's BT address (= Wi-Fi MAC + 1) | `controlData`, read from `registered_bt_address` |
+
+**The leading 6 bytes are not a key and not the phone's real BT MAC.** `BtNetwork.getAddress()` does:
+
+```
+v = SettingsDb.getString(KEY_MAC_ADDRESS, null)
+if (v == null) { v = NetworkUtil.getOrCreateRandomizedMacAddress(); SettingsDb.set(KEY_MAC_ADDRESS, v) }
+return v
+```
+
+`getOrCreateRandomizedMacAddress()` → `createRandomUnicastAddress()`: a **random locally-administered MAC, generated
+once and persisted** in ThinQ's settings DB. That is why `0a:1b:2c:3d:4e:5f` has the locally-administered bit set
+(`0x96`) and matches no interface on the phone (the real public BT MAC is `9C:9E:D5:75:71:86`; the shell, without
+root, sees only redacted/randomised MACs, none equal to it).
+
+**Answers to the old open questions:**
+- *Per phone?* Yes — it's a value ThinQ invents and stores per install, registered with the TV at pairing.
+- *Derived from the TV / an account secret?* No. No crypto, no cloud, no handshake needed to replay.
+- *Rolling / reset?* **Stable** across reboots and Bluetooth toggles (create-once-persist). It changes only if ThinQ's
+  data is cleared or the app is reinstalled — then the TV must be re-registered. This is the likely cause of ThinQ's
+  occasional "can't wake / power button greyed".
+
+### Security view (why this matters)
+- The wake credential is random but travels **in cleartext in a connectionless advertisement** — entropy is moot once
+  it is on the air. One passive sniff gives permanent, unauthenticated wake capability (confirmed by the replay tests).
+- It is **stable and per-install**, so there is no capture race; the TV's half is openly derivable (`Wi-Fi MAC + 1`,
+  and the TV broadcasts it on service `0xFEB9`).
+- Blast radius is power-on only (availability/energy); waking grants no session or control.
+- ThinQ already generates this value randomly and stores it, so a rotating/challenge token over the connected
+  LECCP/GATT channel would have cost LG no more — the static shared identifier is a design choice.
+
+Not yet reconciled: the field captures recorded the header byte as `07`, where the code computes `08` (`byteSize` =
+`controlData.length + 2`); a fresh btsnoop would settle it. It does not change the conclusion.
 
 ## Tools
 
