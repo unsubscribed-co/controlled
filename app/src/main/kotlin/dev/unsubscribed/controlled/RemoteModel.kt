@@ -1,6 +1,9 @@
 package dev.unsubscribed.controlled
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
+import android.os.Build
 import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
 import android.net.Network
@@ -230,6 +233,15 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         search()
     }
 
+    /** Saves the Bluetooth wake key, or clears it when blank; false if it isn't 16 hex digits. */
+    fun setBleKey(key: String): Boolean {
+        val paired = tv ?: return false
+        val clean = key.filter { !it.isWhitespace() && it != ':' }.lowercase()
+        if (clean.isNotEmpty() && (clean.length != 16 || BleWake.hex(clean) == null)) return false
+        save(paired.copy(bleKey = clean.ifEmpty { null }))
+        return true
+    }
+
     fun rename(name: String) {
         val paired = tv ?: return
         name.trim().takeIf { it.isNotEmpty() }?.let { save(paired.copy(name = it)) }
@@ -333,6 +345,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      */
     fun powerOn() {
         val paired = tv ?: return
+        bleWake(paired)
         val c = client
         if (c != null && link == Link.Connected) {
             // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
@@ -373,6 +386,18 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             wakeFailed = client == null
             if (visible) connect()
         }
+    }
+
+    /**
+     * With a key, Turn on also goes over Bluetooth: it reaches the TV from any sleep, while Wake-on-LAN stops working about
+     * an hour after the TV turns off (docs/research/lg-power-on.md).
+     */
+    private fun bleWake(paired: PairedTv) {
+        val key = paired.bleKey?.let(BleWake::hex) ?: return
+        val tv = paired.macs.firstOrNull()?.let(BleWake::bluetoothAddress) ?: return
+        val app = getApplication<Application>()
+        if (Build.VERSION.SDK_INT >= 31 && app.checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) return
+        log { "ble wake sent=${BleWake.send(app, key, tv)}" }
     }
 
     /** Connected: flush fresh queued presses, open the pointer socket, read state, then wait until the socket closes. */

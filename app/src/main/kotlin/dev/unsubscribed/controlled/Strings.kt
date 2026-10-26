@@ -107,6 +107,10 @@ interface Strings {
     val openingOnTv: String
     val noLink: String
     val pairFirst: String
+    val bleKey: String
+    val bleKeyLabel: String
+    val bleKeyHelp: String
+    val bleKeyInvalid: String
     // Dev self-update
     val newVersion: String
     val update: String
@@ -208,6 +212,10 @@ object En : Strings {
     override val openingOnTv = "Opening on your TV"
     override val noLink = "There's no link to open on the TV"
     override val pairFirst = "Pick your TV first, then share again"
+    override val bleKey = "Bluetooth wake key"
+    override val bleKeyLabel = "16 hex digits"
+    override val bleKeyHelp = "Advanced. With the key LG ThinQ uses for your TV, Turn on also works over Bluetooth, even when the TV has been off for hours. Leave empty to turn it off."
+    override val bleKeyInvalid = "It must be 16 hex digits (0-9, a-f)"
     override val newVersion = "A new version is available"
     override val update = "Update"
 }
@@ -308,6 +316,10 @@ object Es : Strings {
     override val openingOnTv = "Abriendo en tu TV"
     override val noLink = "No hay ningún enlace para abrir en el TV"
     override val pairFirst = "Primero elige tu TV y vuelve a compartir"
+    override val bleKey = "Clave para encender por Bluetooth"
+    override val bleKeyLabel = "16 dígitos hexadecimales"
+    override val bleKeyHelp = "Avanzado. Con la clave que LG ThinQ usa para tu TV, Encender también funciona por Bluetooth, aunque el TV lleve horas apagado. Déjala vacía para desactivarlo."
+    override val bleKeyInvalid = "Deben ser 16 dígitos hexadecimales (0-9, a-f)"
     override val newVersion = "Hay una versión nueva"
     override val update = "Actualizar"
 }

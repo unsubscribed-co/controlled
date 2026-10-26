@@ -65,6 +65,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.delay
 
 enum class Sheet { Apps, Inputs, Keyboard, Touchpad }
@@ -75,6 +79,8 @@ fun RemoteScreen(model: RemoteModel) {
     val tv = model.tv ?: return
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var renaming by remember { mutableStateOf(false) }
+    var editingKey by remember { mutableStateOf(false) }
+    val askBluetooth = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     // Keys stay live while reconnecting: presses queue and go out the moment the socket is back.
     val enabled = model.link != Link.CertificateChanged && model.link != Link.NoWifi
 
@@ -85,7 +91,7 @@ fun RemoteScreen(model: RemoteModel) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Header(model, tv, onRename = { renaming = true })
+            Header(model, tv, onRename = { renaming = true }, onBleKey = { editingKey = true })
             if (model.link == Link.CertificateChanged) CertificateNotice(model::forget)
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val width = maxWidth
@@ -133,10 +139,18 @@ fun RemoteScreen(model: RemoteModel) {
         }
     }
     if (renaming) RenameDialog(tv.name, { renaming = false }) { model.rename(it); renaming = false }
+    if (editingKey) BleKeyDialog(tv.bleKey.orEmpty(), { editingKey = false }) { key ->
+        model.setBleKey(key).also { ok ->
+            if (ok) {
+                editingKey = false
+                if (key.isNotBlank() && Build.VERSION.SDK_INT >= 31) askBluetooth.launch(Manifest.permission.BLUETOOTH_ADVERTISE)
+            }
+        }
+    }
 }
 
 @Composable
-private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit) {
+private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit, onBleKey: () -> Unit) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
@@ -155,6 +169,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit) {
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem({ Text(t.rename) }, { menu = false; onRename() }, leadingIcon = { Icon(painterResource(R.drawable.sym_tv), null) })
                 DropdownMenuItem({ Text(t.forgetTv) }, { menu = false; model.forget() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })
+                DropdownMenuItem({ Text(t.bleKey) }, { menu = false; onBleKey() })
                 DropdownMenuItem({ Text(t.privacy) }, { menu = false; uri.openUri(BuildConfig.PRIVACY_URL) })
             }
         }
@@ -376,6 +391,27 @@ private fun VolumeHud(volume: Int?, muted: Boolean, modifier: Modifier) {
             }
         }
     }
+}
+
+/** Advanced: the Bluetooth wake key, pasted by someone who captured it (docs/research/lg-power-on.md). */
+@Composable
+private fun BleKeyDialog(current: String, dismiss: () -> Unit, save: (String) -> Boolean) {
+    val t = LocalStrings.current
+    var key by remember { mutableStateOf(current) }
+    var bad by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(t.bleKey) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(t.bleKeyHelp, style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(key, { key = it; bad = false }, label = { Text(t.bleKeyLabel) }, singleLine = true, isError = bad,
+                    supportingText = if (bad) ({ Text(t.bleKeyInvalid) }) else null)
+            }
+        },
+        confirmButton = { TextButton({ bad = !save(key) }) { Text(t.save) } },
+        dismissButton = { TextButton(dismiss) { Text(t.cancel) } },
+    )
 }
 
 @Composable
