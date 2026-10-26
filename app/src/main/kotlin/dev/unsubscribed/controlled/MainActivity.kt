@@ -64,6 +64,13 @@ class MainActivity : ComponentActivity() {
 
     /** A link from the share sheet goes to the TV; the remote stays open to control what plays. */
     private fun shared(intent: Intent?) {
+        // Dev experiment (docs/research/lg-power-on.md): adb shell am start -n <dev app>/<activity> --es ble_wake <16 hex digits>
+        if (BuildConfig.LOG) intent?.getStringExtra("ble_wake")?.let { p ->
+            val tv = model.tv?.macs?.firstOrNull()?.let(BleWake::bluetoothAddress)
+            val prefix = BleWake.hex(p)
+            val sent = tv != null && prefix != null && BleWake.send(this, prefix, tv)
+            log { "ble wake prefix=$p tv=${tv?.joinToString(":") { "%02x".format(it) }} sent=$sent" }
+        }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
         val ok = model.tv != null && model.share(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
