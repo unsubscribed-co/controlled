@@ -172,6 +172,13 @@ interface Strings {
     val snip: String
     val snipName: String
     val ctrlAltDel: String
+    val toolsScreen: String
+    val pcOnly: String
+    val pcOnlyName: String
+    val duplicate: String
+    val extend: String
+    val secondOnly: String
+    val secondOnlyName: String
     val start: String
     val nextWindow: String
     val allWindows: String
@@ -353,6 +360,13 @@ object En : Strings {
     override val snip = "Snip"
     override val snipName = "Screenshot of an area"
     override val ctrlAltDel = "Ctrl+Alt+Del"
+    override val toolsScreen = "Screen"
+    override val pcOnly = "PC only"
+    override val pcOnlyName = "PC screen only"
+    override val duplicate = "Duplicate"
+    override val extend = "Extend"
+    override val secondOnly = "Second"
+    override val secondOnlyName = "Second screen only"
     override val start = "Start"
     override val nextWindow = "Next"
     override val allWindows = "All windows"
@@ -533,6 +547,14 @@ object Es : Strings {
     override val snip = "Recorte"
     override val snipName = "Captura de una zona"
     override val ctrlAltDel = "Ctrl+Alt+Supr"
+    // Windows' own Spanish names for the display modes (Win+P).
+    override val toolsScreen = "Pantalla"
+    override val pcOnly = "Solo PC"
+    override val pcOnlyName = "Solo pantalla de PC"
+    override val duplicate = "Duplicar"
+    override val extend = "Ampliar"
+    override val secondOnly = "Segunda"
+    override val secondOnlyName = "Solo segunda pantalla"
     override val start = "Inicio"
     override val nextWindow = "Otra"
     override val allWindows = "Todas"

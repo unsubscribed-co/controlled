@@ -248,6 +248,13 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         handler.postDelayed(releaseAlt, Hid.SWITCH_PICK_MS)
     }
 
+    /** Runs [command] from Windows' Run box (Win+R), for what Windows has no shortcut for. */
+    fun run(command: String) {
+        key(Keymap.GUI, Keymap.letter('r'))
+        // shortcut: a fixed wait for the box to open; on a PC slower than that the text lands in the window behind it.
+        handler.postDelayed({ type(command); key(0, Keymap.ENTER) }, Hid.RUN_OPEN_MS)
+    }
+
     /** A media key (Hid.VOLUME_UP...), pressed and released. */
     fun media(usage: Int) {
         send(Hid.CONSUMER, Hid.consumer(usage))
@@ -314,6 +321,8 @@ object Hid {
     const val NEXT = 0xB5
     /** How long after the last Switch tap Alt is let go, picking the window. */
     const val SWITCH_PICK_MS = 900L
+    /** How long the Run box gets to open before the command is typed into it. */
+    const val RUN_OPEN_MS = 500L
     /** How often a lost PC is tried again while its screen is open. */
     const val RETRY_MS = 5_000L
     /**
