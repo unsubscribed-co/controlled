@@ -4,47 +4,67 @@
 Controlled
 
 ## Short description (80 max)
-en-US: A remote for your LG TV. It talks only to your TV, over your home Wi-Fi.
+en-US: Your phone as a remote for your LG TV, and a keyboard and trackpad for your PC.
 (Play flags "no ads" style wording in the short description as promotional; keep it out.)
 
-es-419: Un control remoto para tu TV LG. Solo habla con tu TV, por el Wi-Fi de tu casa.
+es-419: Tu celular como control de tu TV LG, y como teclado y trackpad de tu PC.
 
 ## Full description (4000 max)
 en-US:
-Controlled turns your phone into a remote for your LG smart TV (webOS).
+Controlled turns your phone into one remote for the screens at home: your LG smart TV and your computer.
 
-• A big d-pad, volume and channels that repeat while you hold them, play and pause.
+Your TV (LG webOS)
+• A big d-pad, plus volume and channels that repeat while you hold them, and play and pause.
 • Your TV's apps with their own icons: pin your favorites, and the ones you use most come first.
 • Switch inputs (HDMI) in one tap.
-• Type into the TV's search as you type on your phone.
-• A touchpad for the TV's pointer.
-• Turn the TV off, and on again over Wi-Fi.
-• Use your phone's volume keys for the TV's volume.
-• English and Spanish. Dark and light.
+• Type into the TV's search as you type on your phone, and use a touchpad for the TV's pointer.
+• Turn the TV on and off: over Wi-Fi, Bluetooth, or your phone's IR blaster if it has one.
+• Share a YouTube or Netflix link from your phone and it opens on the TV.
+• Your phone's volume keys control the TV's volume.
 
-Private by design: Controlled talks only to your TV over your home Wi-Fi. No account, no ads, no analytics, no server of ours. The connection to your TV is encrypted, and the TV is checked by its certificate every time.
+Your PC (Windows)
+• Your phone becomes a Bluetooth keyboard and trackpad, with nothing to install on the PC.
+• Switch and close windows and tabs, show the desktop, open Task Manager, lock the PC, and more, in one tap.
+• Copy, paste, undo and media keys.
+• Type on your phone and it appears on the PC, in Spanish (Latin America or Spain) or US layout.
+
+Many controllers, one app: add every TV and PC, pick a default, and switch from the name at the top.
+
+Private by design: Controlled talks only to your own devices, over your home Wi-Fi or Bluetooth. No account, no ads, no analytics, no server of ours. The connection to your TV is encrypted, and the TV is checked by its certificate every time.
+
+English and Spanish. Dark and light.
 
 Open source (AGPL-3.0), from Unsubscribed!: apps without ads or subscriptions.
 
-Works with LG webOS smart TVs on the same Wi-Fi. Other brands are coming.
+Works with LG webOS smart TVs on the same Wi-Fi, and Windows PCs with Bluetooth. More devices are coming.
 
 es-419:
-Controlled convierte tu celular en un control remoto para tu smart TV LG (webOS).
+Controlled convierte tu celular en un solo control para las pantallas de tu casa: tu smart TV LG y tu computador.
 
-• Flechas grandes, volumen y canales que se repiten al mantenerlos presionados, reproducir y pausar.
+Tu TV (LG webOS)
+• Flechas grandes, y volumen y canales que se repiten al mantenerlos presionados, más reproducir y pausar.
 • Las apps de tu TV con sus propios íconos: fija tus favoritas y las que más usas aparecen primero.
 • Cambia de entrada (HDMI) con un solo toque.
-• Escribe en el buscador del TV mientras escribes en tu celular.
-• Un touchpad para el puntero del TV.
-• Apaga el TV y vuelve a encenderlo por Wi-Fi.
-• Usa los botones de volumen de tu celular para el volumen del TV.
-• En español e inglés. Modo oscuro y claro.
+• Escribe en el buscador del TV mientras escribes en tu celular, y usa un touchpad para el puntero del TV.
+• Enciende y apaga el TV: por Wi-Fi, por Bluetooth o con el emisor infrarrojo de tu celular, si tiene uno.
+• Comparte un enlace de YouTube o Netflix desde tu celular y se abre en el TV.
+• Los botones de volumen de tu celular controlan el volumen del TV.
 
-Privacidad por diseño: Controlled solo habla con tu TV a través del Wi-Fi de tu casa. Sin cuentas, sin anuncios, sin analíticas y sin servidores nuestros. La conexión con tu TV está cifrada y la app verifica el certificado del TV cada vez.
+Tu PC (Windows)
+• Tu celular se vuelve un teclado y trackpad Bluetooth, sin instalar nada en el PC.
+• Cambia y cierra ventanas y pestañas, muestra el escritorio, abre el Administrador de tareas, bloquea el PC y más, con un toque.
+• Copiar, pegar, deshacer y teclas multimedia.
+• Escribe en tu celular y aparece en el PC, con distribución en español (Latinoamérica o España) o de EE. UU.
+
+Muchos controles, una app: agrega cada TV y PC, elige uno predeterminado y cambia desde el nombre de arriba.
+
+Privacidad por diseño: Controlled solo habla con tus propios dispositivos, por el Wi-Fi de tu casa o por Bluetooth. Sin cuentas, sin anuncios, sin analíticas y sin servidores nuestros. La conexión con tu TV está cifrada y la app verifica el certificado del TV cada vez.
+
+En español e inglés. Modo oscuro y claro.
 
 Código abierto (AGPL-3.0), de Unsubscribed!: apps sin anuncios ni suscripciones.
 
-Funciona con smart TVs LG con webOS en la misma red Wi-Fi. Pronto llegarán más marcas.
+Funciona con smart TVs LG con webOS en la misma red Wi-Fi, y con PCs con Windows y Bluetooth. Pronto llegarán más dispositivos.
 
 ## Release notes, version 1 (1.0)
 en-US: First release: a remote for LG webOS TVs. D-pad, volume, channels, power on and off, your apps and inputs, a keyboard and a touchpad. No ads, no account.
