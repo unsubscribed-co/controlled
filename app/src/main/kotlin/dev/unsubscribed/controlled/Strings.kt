@@ -111,6 +111,65 @@ interface Strings {
     val bleKeyLabel: String
     val bleKeyHelp: String
     val bleKeyInvalid: String
+    // Controllers and the PC
+    val controllers: String
+    val switchController: String
+    val addTv: String
+    val addPc: String
+    val defaultController: String
+    val makeDefault: String
+    val remove: String
+    val backToControllers: String
+    val pcWaiting: String
+    val pcConnected: String
+    val pcNoBluetooth: String
+    val pcPermission: String
+    val addPcTitle: String
+    val addPcSteps: String
+    val makeVisible: String
+    val trackpadHint: String
+    val leftClick: String
+    val rightClick: String
+    val typeOnPc: String
+    val esc: String
+    val tab: String
+    val toolsWindows: String
+    val toolsTabs: String
+    val toolsEdit: String
+    val closeWindowName: String
+    val minimize: String
+    val maximize: String
+    val snapLeft: String
+    val snapRight: String
+    val previousTab: String
+    val nextTab: String
+    val closeTab: String
+    val closeTabName: String
+    val newTab: String
+    val reopenTab: String
+    val addressBar: String
+    val goBack: String
+    val reload: String
+    val copy: String
+    val paste: String
+    val cut: String
+    val selectAll: String
+    val redo: String
+    val find: String
+    val deleteKey: String
+    val toolsKeys: String
+    val toolsMedia: String
+    val start: String
+    val nextWindow: String
+    val allWindows: String
+    val closeWindow: String
+    val switchWindow: String
+    val mute: String
+    val playPause: String
+    val previous: String
+    val next: String
+    val renamePc: String
+    val pcName: String
     // Dev self-update
     val newVersion: String
     val update: String
@@ -216,6 +275,64 @@ object En : Strings {
     override val bleKeyLabel = "16 hex digits"
     override val bleKeyHelp = "Advanced. With the key LG ThinQ uses for your TV, Turn on also works over Bluetooth, even when the TV has been off for hours. Leave empty to turn it off."
     override val bleKeyInvalid = "It must be 16 hex digits (0-9, a-f)"
+    override val controllers = "Your controllers"
+    override val switchController = "Switch controller"
+    override val addTv = "Add a TV"
+    override val addPc = "Add a PC"
+    override val defaultController = "Default"
+    override val makeDefault = "Make default"
+    override val remove = "Remove"
+    override val backToControllers = "Back"
+    override val pcWaiting = "Waiting for the PC…"
+    override val pcConnected = "Connected"
+    override val pcNoBluetooth = "Turn on Bluetooth to use the PC"
+    override val pcPermission = "Controlled works as a Bluetooth keyboard and mouse for your PC. Android will ask to let it connect to nearby devices."
+    override val addPcTitle = "Add a PC"
+    override val addPcSteps = "1. Tap Make this phone visible.\n2. On the PC: Settings > Bluetooth & devices > Add device > Bluetooth, and pick this phone.\n3. Confirm the code on both."
+    override val makeVisible = "Make this phone visible"
+    override val trackpadHint = "Drag to move. Tap to click. Two fingers: tap to right-click, drag to scroll. Tap, then touch and drag to select."
+    override val leftClick = "Left click"
+    override val rightClick = "Right click"
+    override val typeOnPc = "Type on the PC"
+    override val esc = "Esc"
+    override val tab = "Tab"
+    override val toolsWindows = "Windows"
+    override val toolsTabs = "Tabs"
+    override val toolsEdit = "Edit"
+    override val closeWindowName = "Close window"
+    override val minimize = "Minimize"
+    override val maximize = "Maximize"
+    override val snapLeft = "Left half"
+    override val snapRight = "Right half"
+    override val previousTab = "Previous tab"
+    override val nextTab = "Next tab"
+    override val closeTab = "Close"
+    override val closeTabName = "Close tab"
+    override val newTab = "New tab"
+    override val reopenTab = "Reopen"
+    override val addressBar = "Address"
+    override val goBack = "Back"
+    override val reload = "Reload"
+    override val copy = "Copy"
+    override val paste = "Paste"
+    override val cut = "Cut"
+    override val selectAll = "Select all"
+    override val redo = "Redo"
+    override val find = "Find"
+    override val deleteKey = "Del"
+    override val toolsKeys = "Keys"
+    override val toolsMedia = "Media"
+    override val start = "Start"
+    override val nextWindow = "Next"
+    override val allWindows = "All windows"
+    override val closeWindow = "Close"
+    override val switchWindow = "Switch"
+    override val mute = "Mute"
+    override val playPause = "Play or pause"
+    override val previous = "Previous"
+    override val next = "Next"
+    override val renamePc = "Name this PC"
+    override val pcName = "PC name"
     override val newVersion = "A new version is available"
     override val update = "Update"
 }
@@ -320,6 +437,64 @@ object Es : Strings {
     override val bleKeyLabel = "16 dígitos hexadecimales"
     override val bleKeyHelp = "Avanzado. Con la clave que LG ThinQ usa para tu TV, Encender también funciona por Bluetooth, aunque el TV lleve horas apagado. Déjala vacía para desactivarlo."
     override val bleKeyInvalid = "Deben ser 16 dígitos hexadecimales (0-9, a-f)"
+    override val controllers = "Tus controles"
+    override val switchController = "Cambiar de control"
+    override val addTv = "Agregar un TV"
+    override val addPc = "Agregar un PC"
+    override val defaultController = "Principal"
+    override val makeDefault = "Usar como principal"
+    override val remove = "Quitar"
+    override val backToControllers = "Volver"
+    override val pcWaiting = "Esperando al PC…"
+    override val pcConnected = "Conectado"
+    override val pcNoBluetooth = "Activa el Bluetooth para usar el PC"
+    override val pcPermission = "Controlled funciona como teclado y mouse Bluetooth para tu PC. Android te pedirá permiso para conectarse a dispositivos cercanos."
+    override val addPcTitle = "Agregar un PC"
+    override val addPcSteps = "1. Toca Hacer visible este teléfono.\n2. En el PC: Configuración > Bluetooth y dispositivos > Agregar dispositivo > Bluetooth, y elige este teléfono.\n3. Confirma el código en ambos."
+    override val makeVisible = "Hacer visible este teléfono"
+    override val trackpadHint = "Arrastra para mover. Toca para hacer clic. Dos dedos: toca para clic derecho, arrastra para desplazarte. Toca, luego toca y arrastra para seleccionar."
+    override val leftClick = "Clic izquierdo"
+    override val rightClick = "Clic derecho"
+    override val typeOnPc = "Escribe en el PC"
+    override val esc = "Esc"
+    override val tab = "Tab"
+    override val toolsWindows = "Ventanas"
+    override val toolsTabs = "Pestañas"
+    override val toolsEdit = "Editar"
+    override val closeWindowName = "Cerrar ventana"
+    override val minimize = "Minimizar"
+    override val maximize = "Maximizar"
+    override val snapLeft = "Izquierda"
+    override val snapRight = "Derecha"
+    override val previousTab = "Pestaña anterior"
+    override val nextTab = "Pestaña siguiente"
+    override val closeTab = "Cerrar"
+    override val closeTabName = "Cerrar pestaña"
+    override val newTab = "Nueva"
+    override val reopenTab = "Reabrir"
+    override val addressBar = "Dirección"
+    override val goBack = "Atrás"
+    override val reload = "Recargar"
+    override val copy = "Copiar"
+    override val paste = "Pegar"
+    override val cut = "Cortar"
+    override val selectAll = "Todo"
+    override val redo = "Rehacer"
+    override val find = "Buscar"
+    override val deleteKey = "Supr"
+    override val toolsKeys = "Teclas"
+    override val toolsMedia = "Medios"
+    override val start = "Inicio"
+    override val nextWindow = "Otra"
+    override val allWindows = "Todas"
+    override val closeWindow = "Cerrar"
+    override val switchWindow = "Cambiar"
+    override val mute = "Silenciar"
+    override val playPause = "Reproducir o pausar"
+    override val previous = "Anterior"
+    override val next = "Siguiente"
+    override val renamePc = "Nombra este PC"
+    override val pcName = "Nombre del PC"
     override val newVersion = "Hay una versión nueva"
     override val update = "Actualizar"
 }

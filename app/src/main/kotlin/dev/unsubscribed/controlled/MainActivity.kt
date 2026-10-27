@@ -50,7 +50,8 @@ class MainActivity : ComponentActivity() {
             val strings = remember(LocalConfiguration.current) { stringsOf(resources.configuration.locales[0].language) }
             CompositionLocalProvider(LocalStrings provides strings) {
                 ControlledTheme {
-                    if (!allowed) PermissionScreen(denied, ask = { ask.launch(LOCAL_NETWORK) }, settings = ::openAppSettings)
+                    // The PC needs Bluetooth, not the local network: only TVs wait for this permission.
+                    if (!allowed && model.screen != Screen.Pc) PermissionScreen(denied, ask = { ask.launch(LOCAL_NETWORK) }, settings = ::openAppSettings)
                     else App(model, updateUrl())
                 }
             }
@@ -82,6 +83,8 @@ class MainActivity : ComponentActivity() {
         }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
+        // A link goes to a TV: from the PC, open the default TV (or the first one).
+        if (model.tv == null) (model.controllers.defaultOne() as? PairedTv ?: model.controllers.tvs.firstOrNull())?.let(model::select)
         val ok = model.tv != null && model.share(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
         Toast.makeText(this, if (model.tv == null) t.pairFirst else if (ok) t.openingOnTv else t.noLink, Toast.LENGTH_SHORT).show()
     }
@@ -89,7 +92,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         allowed = Build.VERSION.SDK_INT < 37 || checkSelfPermission(LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
-        if (allowed) model.start()
+        if (allowed || model.screen == Screen.Pc) model.start()
     }
 
     override fun onStop() {
@@ -97,17 +100,18 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    // The phone's volume keys drive the TV while the remote is open and connected (and stay quiet on the phone).
+    // The phone's volume keys drive the TV or the PC while its controller is open and connected (and stay quiet on the phone).
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (!tvVolumeKey(keyCode)) return super.onKeyDown(keyCode, event)
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) model.volumeUp() else model.volumeDown()
+        if (!remoteVolumeKey(keyCode)) return super.onKeyDown(keyCode, event)
+        val up = keyCode == KeyEvent.KEYCODE_VOLUME_UP
+        if (model.screen == Screen.Pc) model.hid?.media(if (up) Hid.VOLUME_UP else Hid.VOLUME_DOWN) else if (up) model.volumeUp() else model.volumeDown()
         return true
     }
 
-    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = tvVolumeKey(keyCode) || super.onKeyUp(keyCode, event)
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = remoteVolumeKey(keyCode) || super.onKeyUp(keyCode, event)
 
-    private fun tvVolumeKey(keyCode: Int) = (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
-        model.screen == Screen.Remote && model.link == Link.Connected
+    private fun remoteVolumeKey(keyCode: Int) = (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
+        (model.screen == Screen.Remote && model.link == Link.Connected || model.screen == Screen.Pc && model.hid?.link == PcLink.Connected)
 
     private fun openAppSettings() {
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

@@ -37,11 +37,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
-/** Where the app is: finding a TV, waiting for Accept, or the remote for the paired one. */
+/** Where the app is: finding a TV, waiting for Accept, the TV remote, or the PC keyboard and trackpad. */
 sealed interface Screen {
     data object Find : Screen
     data class Pairing(val tv: FoundTv) : Screen
     data object Remote : Screen
+    data object Pc : Screen
 }
 
 /** The remote's link to the paired TV. */
@@ -77,10 +78,22 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     private val http = OkHttpClient()
     private val cm = app.getSystemService(ConnectivityManager::class.java)
 
-    var tv by mutableStateOf(store.load())
+    /** Every controller set up, and the default one; the app opens on the default. */
+    var controllers by mutableStateOf(store.load())
         private set
-    var screen by mutableStateOf<Screen>(if (tv == null) Screen.Find else Screen.Remote)
+    /** The TV on screen, when the current controller is a TV. */
+    var tv by mutableStateOf(controllers.defaultOne() as? PairedTv)
         private set
+    /** The PC on screen, when the current controller is a PC. */
+    var pc by mutableStateOf(controllers.defaultOne() as? PairedPc)
+        private set
+    var screen by mutableStateOf(screenFor(controllers.defaultOne()))
+        private set
+    /**
+     * The phone as a Bluetooth keyboard and mouse; a computer that connects while adding one is saved as a PC. Null before
+     * Android 9, which has no HID device profile: there the app doesn't offer Add a PC.
+     */
+    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name -> if (screen == Screen.Pc && pc == null) savePc(PairedPc(address, name ?: "PC")) } else null
     var link by mutableStateOf(Link.Connecting)
         private set
     var volume by mutableStateOf<Int?>(null)
@@ -150,6 +163,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun start() {
         visible = true
         grace?.cancel()
+        if (screen == Screen.Pc) return hid?.start(pc?.address) ?: Unit
         if (screen == Screen.Find) return search()
         if (tv == null) return
         val c = client
@@ -171,6 +185,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             session?.cancel()
             disconnect()
             link = Link.Connecting
+            hid?.stop()
         }
     }
 
@@ -222,15 +237,64 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
     /** Forget and re-pair: the only way past a changed certificate. */
     fun forget() {
+        tv?.let(::remove)
+    }
+
+    /** Opens [controller]: the TV remote or the PC pad; null finds a TV. Only the one on screen holds a connection. */
+    fun select(controller: Controller?) {
         session?.cancel()
         disconnect()
-        store.forget()
-        tv = null
-        apps.clear()
-        inputs.clear()
-        icons.clear()
-        screen = Screen.Find
-        search()
+        search?.cancel()
+        link = Link.Connecting
+        if (controller !is PairedPc) hid?.stop()
+        if (controller !is PairedTv || controller.id != tv?.id) {
+            apps.clear()
+            inputs.clear()
+            icons.clear()
+            volume = null
+            foreground = null
+        }
+        tv = controller as? PairedTv
+        pc = controller as? PairedPc
+        screen = screenFor(controller)
+        if (visible) start()
+    }
+
+    /** Find and pair another TV; Back returns to the default controller. */
+    fun addTv() = select(null)
+
+    /** Waits for a computer to pair with the phone (from its Bluetooth settings); it's saved when it connects. */
+    fun addPc() {
+        select(null)
+        search?.cancel()
+        screen = Screen.Pc
+        if (visible) hid?.start(null)
+    }
+
+    /** Back from adding a controller, to the default one (or to finding a TV when there's none yet). */
+    fun cancelAdd() = select(controllers.defaultOne())
+
+    fun setDefault(controller: Controller) = saveAll(controllers.copy(default = controller.id))
+
+    fun remove(controller: Controller) {
+        val rest = controllers.copy(tvs = controllers.tvs.filter { it.id != controller.id }, pcs = controllers.pcs.filter { it.id != controller.id })
+        // Removing the default makes the next one the default.
+        saveAll(if (rest.default == controller.id) rest.copy(default = rest.all.firstOrNull()?.id) else rest)
+        if (controller.id == tv?.id || controller.id == pc?.id) select(controllers.defaultOne())
+    }
+
+    fun renameController(controller: Controller, name: String) {
+        val clean = name.trim().takeIf { it.isNotEmpty() } ?: return
+        when (controller) {
+            is PairedTv -> save(controller.copy(name = clean))
+            is PairedPc -> savePc(controller.copy(name = clean))
+        }
+    }
+
+    private fun screenFor(controller: Controller?): Screen = when (controller) {
+        is PairedTv -> Screen.Remote
+        is PairedPc -> Screen.Pc
+        null -> Screen.Find
     }
 
     /** Saves the Bluetooth wake key, or clears it when blank; false if it isn't 16 hex digits. */
@@ -243,8 +307,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun rename(name: String) {
-        val paired = tv ?: return
-        name.trim().takeIf { it.isNotEmpty() }?.let { save(paired.copy(name = it)) }
+        tv?.let { renameController(it, name) }
     }
 
     fun togglePin(id: String) {
@@ -275,9 +338,28 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         save(paired.copy(pins = pins))
     }
 
+    /** Saves [paired] in its place (a TV re-paired at the same address replaces its old entry); the first one is the default. */
     private fun save(paired: PairedTv) {
-        store.save(paired)
-        tv = paired
+        val tvs = controllers.tvs.toMutableList()
+        val i = tvs.indexOfFirst { it.id == paired.id || it.ip == paired.ip }
+        if (i >= 0) tvs[i] = paired else tvs += paired
+        val old = controllers.tvs.getOrNull(i)?.id
+        val default = if (controllers.default == null || controllers.default == old) paired.id else controllers.default
+        saveAll(controllers.copy(tvs = tvs, default = default))
+        if (tv == null || tv?.id == old) tv = paired
+    }
+
+    private fun savePc(paired: PairedPc) {
+        val pcs = controllers.pcs.toMutableList()
+        val i = pcs.indexOfFirst { it.id == paired.id }
+        if (i >= 0) pcs[i] = paired else pcs += paired
+        saveAll(controllers.copy(pcs = pcs, default = controllers.default ?: paired.id))
+        if (pc == null || pc?.id == paired.id) pc = paired
+    }
+
+    private fun saveAll(all: Controllers) {
+        store.save(all)
+        controllers = all
     }
 
     /**
@@ -599,6 +681,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        hid?.stop()
         cm.unregisterNetworkCallback(wifi)
         session?.cancel()
         disconnect()

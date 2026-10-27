@@ -75,7 +75,7 @@ enum class Sheet { Apps, Inputs, Keyboard, Touchpad }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RemoteScreen(model: RemoteModel) {
+fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
     val tv = model.tv ?: return
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var renaming by remember { mutableStateOf(false) }
@@ -91,7 +91,7 @@ fun RemoteScreen(model: RemoteModel) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Header(model, tv, onRename = { renaming = true }, onBleKey = { editingKey = true })
+            Header(model, tv, switch, onRename = { renaming = true }, onBleKey = { editingKey = true })
             if (model.link == Link.CertificateChanged) CertificateNotice(model::forget)
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val width = maxWidth
@@ -150,14 +150,14 @@ fun RemoteScreen(model: RemoteModel) {
 }
 
 @Composable
-private fun Header(model: RemoteModel, tv: PairedTv, onRename: () -> Unit, onBleKey: () -> Unit) {
+private fun Header(model: RemoteModel, tv: PairedTv, switch: () -> Unit, onRename: () -> Unit, onBleKey: () -> Unit) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
     val live = model.link == Link.Connected && !model.asleep
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(tv.name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            ControllerTitle(tv.name, switch)
             StatusLine(model, tv)
         }
         Key(R.drawable.sym_power_settings_new, if (live) t.powerOff else t.powerOn, size = 48.dp, accent = !live,
@@ -415,13 +415,13 @@ private fun BleKeyDialog(current: String, dismiss: () -> Unit, save: (String) ->
 }
 
 @Composable
-private fun RenameDialog(current: String, dismiss: () -> Unit, save: (String) -> Unit) {
+fun RenameDialog(current: String, dismiss: () -> Unit, pc: Boolean = false, save: (String) -> Unit) {
     val t = LocalStrings.current
     var name by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(t.renameTitle) },
-        text = { OutlinedTextField(name, { name = it }, label = { Text(t.tvName) }, singleLine = true) },
+        title = { Text(if (pc) t.renamePc else t.renameTitle) },
+        text = { OutlinedTextField(name, { name = it }, label = { Text(if (pc) t.pcName else t.tvName) }, singleLine = true) },
         confirmButton = { TextButton({ save(name) }, enabled = name.isNotBlank()) { Text(t.save) } },
         dismissButton = { TextButton(dismiss) { Text(t.cancel) } },
     )

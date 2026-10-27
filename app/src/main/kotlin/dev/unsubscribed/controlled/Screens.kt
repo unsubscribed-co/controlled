@@ -34,6 +34,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -76,14 +78,17 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun App(model: RemoteModel, updateUrl: String?) {
+    var switching by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
             updateUrl?.let { UpdateBanner(it) }
             when (val screen = model.screen) {
                 Screen.Find -> FindScreen(model)
                 is Screen.Pairing -> PairingScreen(screen.tv, model::cancelPairing)
-                Screen.Remote -> RemoteScreen(model)
+                Screen.Remote -> RemoteScreen(model) { switching = true }
+                Screen.Pc -> PcScreen(model) { switching = true }
             }
+            if (switching) ControllersSheet(model) { switching = false }
         }
     }
 }
@@ -99,15 +104,18 @@ private fun UpdateBanner(url: String) {
 }
 
 @Composable
-fun PermissionScreen(denied: Boolean, ask: () -> Unit, settings: () -> Unit) {
+fun PermissionScreen(
+    denied: Boolean, ask: () -> Unit, settings: () -> Unit,
+    title: String = LocalStrings.current.permissionTitle, body: String = LocalStrings.current.permissionBody, icon: Int = R.drawable.sym_wifi_find,
+) {
     val t = LocalStrings.current
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center) {
-            Icon(painterResource(R.drawable.sym_wifi_find), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(painterResource(icon), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(16.dp))
-            Text(t.permissionTitle, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(8.dp))
-            Text(t.permissionBody, style = MaterialTheme.typography.bodyLarge)
+            Text(body, style = MaterialTheme.typography.bodyLarge)
             if (denied) {
                 Spacer(Modifier.height(8.dp))
                 Text(t.permissionDenied, color = MaterialTheme.colorScheme.error)
@@ -123,8 +131,15 @@ fun PermissionScreen(denied: Boolean, ask: () -> Unit, settings: () -> Unit) {
 private fun FindScreen(model: RemoteModel) {
     val t = LocalStrings.current
     var address by remember { mutableStateOf("") }
+    // Adding another TV: Back returns to the controller that was open.
+    BackHandler(!model.controllers.isEmpty, model::cancelAdd)
     LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text(t.findTitle, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!model.controllers.isEmpty) IconButton(model::cancelAdd, Modifier.size(48.dp)) { Icon(painterResource(R.drawable.sym_arrow_back), t.backToControllers) }
+                Text(t.findTitle, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+            }
+        }
         model.findError?.let { error ->
             item {
                 Text(
@@ -167,6 +182,12 @@ private fun FindScreen(model: RemoteModel) {
                     keyboardActions = KeyboardActions(onGo = { connect() }),
                 )
                 FilledTonalButton({ connect() }, Modifier.height(48.dp), enabled = address.isNotBlank()) { Text(t.connect) }
+            }
+        }
+        if (model.hid != null) item {
+            TextButton(model::addPc, Modifier.height(48.dp)) {
+                Icon(painterResource(R.drawable.sym_computer), null)
+                Text(t.addPc, Modifier.padding(start = 8.dp))
             }
         }
     }

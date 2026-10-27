@@ -76,7 +76,7 @@ fun Modifier.combinedClickableCompat(enabled: Boolean, label: String, onClick: (
     combinedClickable(enabled = enabled, onClickLabel = label, onLongClick = onLongClick, onClick = onClick)
 
 @Composable
-private fun SheetTitle(text: String, action: @Composable () -> Unit = {}) {
+fun SheetTitle(text: String, action: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleLarge)
         action()
