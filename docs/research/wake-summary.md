@@ -64,7 +64,12 @@ BLE-scan capture is designed but NOT built — see "ideas" below.)
 - The dev app is GATT-paired to the TV from testing (harmless).
 
 ## Open ideas (not built)
-- **In-app BLE key capture**: Controlled scans (`BluetoothLeScanner`) for ThinQ's `0xFEBA` advert whose last 6 bytes
-  match the paired TV, extracts the first 6 bytes + `0800` → saves the key. One-tap setup, no adb/btsnoop. Reuses the
-  scan code from `GattWake.scanAndProbe`. Needs `BLUETOOTH_SCAN`. Do reactively.
+- ~~**In-app BLE key capture**~~ **Tested and ruled out (2026-10-27).**
+  - **Scanning:** the phone does not hear its own adverts. Controlled advertised the wake key for 10 s while scanning in
+    the foreground, and its scan got nothing but other LG devices. On top of that, HyperOS freezes a backgrounded app,
+    so it misses ThinQ's advert as well.
+  - **Reading the key from the TV:** `com.webos.service.asc/getDeviceList`, `getRegisteredDevices`, `getDevices`,
+    `getDeviceInfo`, `getStatus` and `getDeviceStatus` all answer "404 no such service or method". ThinQ only ever calls
+    `registerDevice`.
+  - **What's left:** capturing the key would need a second phone, or the btsnoop route described above.
 - Ship 1.4 to Play (held by Juan).
