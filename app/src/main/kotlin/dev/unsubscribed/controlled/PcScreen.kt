@@ -250,12 +250,12 @@ private val TOOLS: Map<Tools, List<Shortcut>> = mapOf(
         // Windows takes Ctrl+Alt+Del from a Bluetooth keyboard too: the security screen (lock, switch user, sign out).
         Shortcut(R.drawable.sym_shield, { ctrlAltDel }) { key(Keymap.CTRL or Keymap.ALT, Keymap.DELETE) },
     ),
-    // Windows' display modes by name: Win+P opens on the current mode, so arrow keys can't pick one blind.
+    // Windows' display modes, in its Win+P menu's order.
     Tools.Screen to listOf(
-        Shortcut(R.drawable.sym_laptop_windows, { pcOnly }, { pcOnlyName }) { run("displayswitch /internal") },
-        Shortcut(R.drawable.sym_content_copy, { duplicate }) { run("displayswitch /clone") },
-        Shortcut(R.drawable.sym_tv_displays, { extend }) { run("displayswitch /extend") },
-        Shortcut(R.drawable.sym_monitor, { secondOnly }, { secondOnlyName }) { run("displayswitch /external") },
+        Shortcut(R.drawable.sym_laptop_windows, { pcOnly }, { pcOnlyName }) { project(0) },
+        Shortcut(R.drawable.sym_content_copy, { duplicate }) { project(1) },
+        Shortcut(R.drawable.sym_tv_displays, { extend }) { project(2) },
+        Shortcut(R.drawable.sym_monitor, { secondOnly }, { secondOnlyName }) { project(3) },
     ),
     Tools.Media to listOf(
         Shortcut(R.drawable.sym_skip_previous, { previous }) { media(Hid.PREVIOUS) },
