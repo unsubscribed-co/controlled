@@ -32,6 +32,8 @@ android {
         versionName = "1.6"
         // Play wants the privacy policy reachable from inside the app too (docs/play-listing.md).
         buildConfigField("String", "PRIVACY_URL", "\"${config.getValue("privacyUrl")}\"")
+        // AGPL: the app links to its own source.
+        buildConfigField("String", "SOURCE_URL", "\"${config.getValue("sourceUrl")}\"")
     }
 
     // prod ships through Google Play; dev installs next to it from the dev site and updates itself (docs/CONFIG.md).

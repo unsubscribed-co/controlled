@@ -25,7 +25,7 @@ The advert's manufacturer data (company `0x00C4`, service `0xFEBA`) is `[phone's
 0x00][TV BT addr ×6]`. The "key" is **ThinQ's own randomized, persisted MAC** (`BtNetwork.getAddress()` →
 `getOrCreateRandomizedMacAddress`, stored in ThinQ's SettingsDb), registered on the TV via SSAP at pairing. Not a
 secret, not cloud, not derived — stable per ThinQ install, changes only on ThinQ data-clear/reinstall. The TV wakes for
-an advert carrying a registered MAC. Juan's key: `0a1b2c3d4e5f0700`. (Capture today needs ThinQ + a btsnoop; an in-app
+an advert carrying a registered MAC. (Keys in these docs are made-up examples; the real one stays on the phone.) (Capture today needs ThinQ + a btsnoop; an in-app
 BLE-scan capture is designed but NOT built — see "ideas" below.)
 
 ## Self-registering a waker without ThinQ — hit a hard wall (see `lg-ble-registration.md`)
@@ -60,7 +60,7 @@ BLE-scan capture is designed but NOT built — see "ideas" below.)
 ## Device state
 - Phone on Wi-Fi adb `192.168.1.4:5555` (may drop). Dev app `dev.unsubscribed.controlled.dev` = `dev.24-ir`, **no**
   paired TV / no BLE key (wiped during testing). Prod app `dev.unsubscribed.controlled` = 1.2/1.3, **untouched**,
-  holds Juan's pairing; paste `0a1b2c3d4e5f0700` into its Bluetooth wake key menu when 1.3+ lands.
+  holds Juan's pairing; paste the captured key into its Bluetooth wake key menu when 1.3+ lands.
 - The dev app is GATT-paired to the TV from testing (harmless).
 
 ## Open ideas (not built)

@@ -5,6 +5,8 @@ Juan's TV: LG 70UP7500PSC (2021, webOS 6), on Wi-Fi, IP 192.168.1.12, Wi-Fi MAC 
 Bluetooth" on; Quick Start+ apparently off (on turn-off the TV goes Active → Active Standby → Suspend and closes its
 socket).
 
+> The Bluetooth wake key in this document is a made-up example; the real one stays on the owner's phone and is not published.
+
 ## Wake-on-LAN (Wi-Fi) works only for about an hour
 
 - **Broadcast magic packets never reach the sleeping TV** (2026-10-22/23): Juan's router drops them, even minutes

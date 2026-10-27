@@ -171,6 +171,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, switch: () -> Unit, onRenam
                 DropdownMenuItem({ Text(t.forgetTv) }, { menu = false; model.forget() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })
                 DropdownMenuItem({ Text(t.bleKey) }, { menu = false; onBleKey() })
                 DropdownMenuItem({ Text(t.privacy) }, { menu = false; uri.openUri(BuildConfig.PRIVACY_URL) })
+                DropdownMenuItem({ Text(t.sourceCode) }, { menu = false; uri.openUri(BuildConfig.SOURCE_URL) })
             }
         }
     }

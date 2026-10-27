@@ -15,7 +15,7 @@ import android.os.ParcelUuid
  * shortcut: experiment (2026-10-26); the 8 bytes may depend on the phone or the ThinQ account. Promote it once that's known.
  */
 object BleWake {
-    /** The 8 bytes in ThinQ's advertisement from Juan's phone to his TV, identical in both captures. */
+    /** An example of the 8 bytes in ThinQ's advertisement (made up: each phone's are its own, see docs/research/lg-power-on.md). */
     const val THINQ_PREFIX = "0a1b2c3d4e5f0700"
 
     /** LG's Bluetooth address is its Wi-Fi MAC plus one: a4:ce:da:61:d0:d4 -> a4 ce da 61 d0 d5. */
