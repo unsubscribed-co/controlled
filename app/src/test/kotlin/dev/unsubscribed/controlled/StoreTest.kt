@@ -30,5 +30,9 @@ class ControllersTest {
         assertEquals(all, json.decodeFromString<Controllers>(json.encodeToString(all)))
         // Ids aren't stored: they follow from the key and the address.
         assertEquals(false, json.encodeToString(all).contains("\"id\""))
+        // A PC's layout is stored even when it's the guess from the phone's language.
+        assertEquals(true, json.encodeToString(all).contains("\"layout\""))
+        // A PC saved before layouts existed keeps typing Latin American.
+        assertEquals(Layout.LatAm, json.decodeFromString<PairedPc>("""{"address":"AA:BB:CC:DD:EE:FF","name":"PC"}""").layout)
     }
 }

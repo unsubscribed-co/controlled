@@ -170,6 +170,11 @@ interface Strings {
     val next: String
     val renamePc: String
     val pcName: String
+    val keyboardLayout: String
+    val keyboardLayoutHint: String
+    val layoutLatAm: String
+    val layoutSpain: String
+    val layoutUs: String
     // Dev self-update
     val newVersion: String
     val update: String
@@ -333,6 +338,11 @@ object En : Strings {
     override val next = "Next"
     override val renamePc = "Name this PC"
     override val pcName = "PC name"
+    override val keyboardLayout = "Keyboard layout"
+    override val keyboardLayoutHint = "Pick the one this PC uses in Windows, so what you type comes out right."
+    override val layoutLatAm = "Spanish (Latin America)"
+    override val layoutSpain = "Spanish (Spain)"
+    override val layoutUs = "English (US)"
     override val newVersion = "A new version is available"
     override val update = "Update"
 }
@@ -495,6 +505,11 @@ object Es : Strings {
     override val next = "Siguiente"
     override val renamePc = "Nombra este PC"
     override val pcName = "Nombre del PC"
+    override val keyboardLayout = "Distribución del teclado"
+    override val keyboardLayoutHint = "Elige la que usa este PC en Windows, para que lo que escribas salga bien."
+    override val layoutLatAm = "Español (Latinoamérica)"
+    override val layoutSpain = "Español (España)"
+    override val layoutUs = "Inglés (EE. UU.)"
     override val newVersion = "Hay una versión nueva"
     override val update = "Actualizar"
 }

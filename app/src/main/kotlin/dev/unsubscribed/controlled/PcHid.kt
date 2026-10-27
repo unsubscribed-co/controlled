@@ -136,8 +136,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         handler.removeCallbacks(resync)
         // What's still queued (Alt's release, a key-up) goes first, then the goodbye: nothing stays held on the PC.
         val d = host
-        val left = outbox.toList()
-        outbox.clear()
+        val left = outbox.takeAll()
         io.post {
             if (d != null) left.forEach { (id, r) -> safely { h.sendReport(d, id, r) } }
             safely {
@@ -158,31 +157,23 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
      * The send itself runs on [io]: it's a call into the Bluetooth process, 2 ms typically and up to 11, which on the
      * main thread delayed the touches that move the pointer.
      */
-    private val outbox = ArrayDeque<Pair<Int, ByteArray>>()
+    private val outbox = Outbox()
     private var lastSent = 0L
     private val drain: Runnable = Runnable { drain() }
-    /** The queued move still waiting at the back of [outbox], which later moves add to; and its sum so far. */
-    private var queuedMove: Pair<Int, ByteArray>? = null
-    private var queuedX = 0
-    private var queuedY = 0
 
-    private fun send(id: Int, report: ByteArray) = enqueue(id to report)
-
-    private fun enqueue(report: Pair<Int, ByteArray>) {
-        if (host == null) return
-        outbox.addLast(report)
-        if (outbox.size == 1) drain()
+    private fun send(id: Int, report: ByteArray) {
+        if (host != null && outbox.add(id, report)) drain()
     }
 
     private fun drain() {
         handler.removeCallbacks(drain)
-        while (outbox.isNotEmpty()) {
+        while (!outbox.isEmpty) {
             val h = hid
             val d = host
-            if (h == null || d == null) { outbox.clear(); return }
+            if (h == null || d == null) { outbox.takeAll(); return }
             val wait = lastSent + Hid.PACE_MS - SystemClock.uptimeMillis()
             if (wait > 0) { handler.postDelayed(drain, wait); return }
-            val (id, report) = outbox.removeFirst()
+            val (id, report) = outbox.take()
             io.post { safely { h.sendReport(d, id, report) } }
             lastSent = SystemClock.uptimeMillis()
         }
@@ -197,7 +188,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private val resync = Runnable {
         val h = hid
         val d = host
-        if (h != null && d != null && outbox.isEmpty()) {
+        if (h != null && d != null && outbox.isEmpty) {
             val keys = Hid.keyboard(if (switching) Keymap.ALT else 0, 0)
             val buttons = Hid.mouse(held, 0, 0)
             io.post { safely { h.sendReport(d, Hid.KEYBOARD, keys) && h.sendReport(d, Hid.MOUSE, buttons) } }
@@ -209,17 +200,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** One report per move, whatever its size (16-bit deltas), so a quick flick never arrives in pieces. */
     fun move(dx: Int, dy: Int) {
-        val queued = queuedMove
-        if (queued != null && outbox.lastOrNull() === queued) {
-            // Still waiting: add to it rather than queue behind it, so the pointer never lags the finger.
-            queuedX += dx
-            queuedY += dy
-            queuedMove = (Hid.MOUSE to Hid.mouse(held, queuedX, queuedY)).also { outbox[outbox.size - 1] = it }
-            return
-        }
-        queuedX = dx
-        queuedY = dy
-        queuedMove = (Hid.MOUSE to Hid.mouse(held, dx, dy)).also(::enqueue)
+        if (host != null && outbox.move(held, dx, dy)) drain()
     }
 
     fun hold(button: Int, down: Boolean) {
@@ -240,9 +221,12 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         send(Hid.KEYBOARD, Hid.keyboard(0, 0))
     }
 
-    /** Types [text] as the PC's Latin American layout reads keys; characters it can't type are skipped. */
+    /** The keyboard layout the PC is set to, so typed text comes out as typed. */
+    var layout = Layout.LatAm
+
+    /** Types [text] as the PC's [layout] reads keys; characters it can't type are skipped. */
     fun type(text: String) {
-        for (c in text) Keymap.strokes(c)?.forEach { key(it.mods, it.key) }
+        for (c in text) Keymap.strokes(c, layout)?.forEach { key(it.mods, it.key) }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -269,6 +253,49 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         send(Hid.CONSUMER, Hid.consumer(usage))
         send(Hid.CONSUMER, Hid.consumer(0))
     }
+}
+
+/**
+ * Reports waiting to go out, oldest first (PcHid sends them [Hid.PACE_MS] apart). A move adds to a move still waiting at
+ * the back instead of queueing behind it, so the pointer never trails the finger; anything else keeps its place and is
+ * never dropped or merged. Unit-tested on the JVM.
+ */
+class Outbox {
+    private val items = ArrayDeque<Pair<Int, ByteArray>>()
+    /** The move at the back still waiting, and its sum so far. */
+    private var tail: Pair<Int, ByteArray>? = null
+    private var tailX = 0
+    private var tailY = 0
+
+    val isEmpty get() = items.isEmpty()
+
+    /** Queues [report]; true when the queue was empty (nothing is on its way, so start sending). */
+    fun add(id: Int, report: ByteArray): Boolean {
+        items.addLast(id to report)
+        return items.size == 1
+    }
+
+    /** Queues a pointer move with [buttons] held, or adds it to the move still waiting at the back; true as [add]. */
+    fun move(buttons: Int, dx: Int, dy: Int): Boolean {
+        val t = tail
+        if (t != null && items.lastOrNull() === t) {
+            tailX += dx
+            tailY += dy
+            tail = (Hid.MOUSE to Hid.mouse(buttons, tailX, tailY)).also { items[items.size - 1] = it }
+            return false
+        }
+        tailX = dx
+        tailY = dy
+        val m = Hid.MOUSE to Hid.mouse(buttons, dx, dy)
+        tail = m
+        items.addLast(m)
+        return items.size == 1
+    }
+
+    fun take(): Pair<Int, ByteArray> = items.removeFirst()
+
+    /** Everything still waiting, in order, leaving the queue empty. */
+    fun takeAll(): List<Pair<Int, ByteArray>> = items.toList().also { items.clear() }
 }
 
 /** HID wire format, unit-tested on the JVM: one descriptor with three reports (keyboard, mouse, media keys). */

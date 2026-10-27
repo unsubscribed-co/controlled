@@ -1,9 +1,30 @@
 package dev.unsubscribed.controlled
 
+import kotlinx.serialization.Serializable
+import java.util.Locale
+
 // One key press: HID modifier bits + a Keyboard-page usage.
 data class Stroke(val mods: Int, val key: Int)
 
-/** Characters to HID key presses for a PC on the Spanish (Latin America) layout (KLID 0000080A). shortcut: one layout; add US and others when someone needs them. */
+/** The keyboard layout the PC is set to, as Windows names it (KLID): which key types which character. */
+@Serializable
+enum class Layout(val klid: String) {
+    LatAm("0000080A"), Spain("0000040A"), US("00000409");
+
+    companion object {
+        /** The phone's language is the best first guess: Spanish in Spain, Spanish elsewhere, anything else. */
+        fun guess(locale: Locale = Locale.getDefault()) = when {
+            locale.language != "es" -> US
+            locale.country == "ES" -> Spain
+            else -> LatAm
+        }
+    }
+}
+
+/**
+ * Characters to HID key presses for each [Layout]. Every table is checked against Windows' own layout by
+ * tools/check-keymap.ps1. Letters sit on the same keys in all three (QWERTY), so shortcuts like Ctrl+C don't depend on it.
+ */
 object Keymap {
     const val CTRL = 0x01; const val SHIFT = 0x02; const val ALT = 0x04; const val GUI = 0x08; const val ALT_GR = 0x40
     // Named usages used elsewhere:
@@ -13,128 +34,111 @@ object Keymap {
     fun letter(c: Char) = 0x04 + (c - 'a')
     const val HOME = 0x4A; const val END = 0x4D; const val PAGE_UP = 0x4B; const val PAGE_DOWN = 0x4E; const val F4 = 0x3D; const val F5 = 0x3E
 
-    // Dead key stroke definitions on Latin American layout
-    private val DEAD_ACUTE = Stroke(0, 0x2F)          // US '[': unshifted is dead acute (´)
-    private val DEAD_DIAERESIS = Stroke(SHIFT, 0x2F)  // US '[': shifted is dead diaeresis (¨)
-    private val DEAD_GRAVE = Stroke(ALT_GR, 0x31)      // US '\': AltGr is dead grave (`)
-    private val DEAD_CIRCUMFLEX = Stroke(ALT_GR, 0x34) // US '\'': AltGr is dead circumflex (^)
-
-    private val DIRECT_MAP: Map<Char, Stroke> = buildMap {
-        // Whitespace and control characters
+    /** The keys every layout shares: whitespace, letters and digits. */
+    private fun MutableMap<Char, Stroke>.common() {
         put(' ', Stroke(0, SPACE))
         put('\n', Stroke(0, ENTER))
         put('\r', Stroke(0, ENTER))
         put('\t', Stroke(0, TAB))
-
-        // Lowercase letters a-z (HID usages 0x04..0x1D)
         for (i in 0 until 26) {
-            put(('a'.code + i).toChar(), Stroke(0, 0x04 + i))
+            put('a' + i, Stroke(0, 0x04 + i))
+            put('A' + i, Stroke(SHIFT, 0x04 + i))
         }
-
-        // Uppercase letters A-Z (HID usages 0x04..0x1D with Shift)
-        for (i in 0 until 26) {
-            put(('A'.code + i).toChar(), Stroke(SHIFT, 0x04 + i))
-        }
-
-        // Digits 1-9 (HID 0x1E..0x26) and 0 (HID 0x27)
-        for (i in 1..9) {
-            put(('0'.code + i).toChar(), Stroke(0, 0x1E + (i - 1)))
-        }
+        // Digits 1-9 are 0x1E..0x26, 0 is 0x27.
+        for (i in 1..9) put('0' + i, Stroke(0, 0x1E + i - 1))
         put('0', Stroke(0, 0x27))
-
-        // US '`' key (HID 0x35): base '|', shift '°', AltGr '¬'
-        put('|', Stroke(0, 0x35))
-        put('°', Stroke(SHIFT, 0x35))
-        put('¬', Stroke(ALT_GR, 0x35))
-
-        // Number row shift symbols (keys 0x1E..0x27)
-        put('!', Stroke(SHIFT, 0x1E))
-        put('"', Stroke(SHIFT, 0x1F))
-        put('#', Stroke(SHIFT, 0x20))
-        put('$', Stroke(SHIFT, 0x21))
-        put('%', Stroke(SHIFT, 0x22))
-        put('&', Stroke(SHIFT, 0x23))
-        put('/', Stroke(SHIFT, 0x24))
-        put('(', Stroke(SHIFT, 0x25))
-        put(')', Stroke(SHIFT, 0x26))
-        put('=', Stroke(SHIFT, 0x27))
-
-        // US '-' key (HID 0x2D): base '\'', shift '?', AltGr '\'
-        put('\'', Stroke(0, 0x2D))
-        put('?', Stroke(SHIFT, 0x2D))
-        put('\\', Stroke(ALT_GR, 0x2D))
-
-        // US '=' key (HID 0x2E): base '¿', shift '¡'
-        put('¿', Stroke(0, 0x2E))
-        put('¡', Stroke(SHIFT, 0x2E))
-
-        // US 'Q' key (HID 0x14): AltGr '@'
-        put('@', Stroke(ALT_GR, 0x14))
-
-        // US ']' key (HID 0x30): base '+', shift '*', AltGr '~' (not a dead key here, checked against Windows)
-        put('+', Stroke(0, 0x30))
-        put('*', Stroke(SHIFT, 0x30))
-        put('~', Stroke(ALT_GR, 0x30))
-
-        // US ';' key (HID 0x33): base 'ñ', shift 'Ñ'
-        put('ñ', Stroke(0, 0x33))
-        put('Ñ', Stroke(SHIFT, 0x33))
-
-        // US '\'' key (HID 0x34): base '{', shift '['
-        put('{', Stroke(0, 0x34))
-        put('[', Stroke(SHIFT, 0x34))
-
-        // US '\' key (HID 0x31): base '}', shift ']'
-        put('}', Stroke(0, 0x31))
-        put(']', Stroke(SHIFT, 0x31))
-
-        // Non-US ISO extra key left of Z (HID 0x64): base '<', shift '>'
-        put('<', Stroke(0, 0x64))
-        put('>', Stroke(SHIFT, 0x64))
-
-        // US ',' key (HID 0x36): base ',', shift ';'
-        put(',', Stroke(0, 0x36))
-        put(';', Stroke(SHIFT, 0x36))
-
-        // US '.' key (HID 0x37): base '.', shift ':'
-        put('.', Stroke(0, 0x37))
-        put(':', Stroke(SHIFT, 0x37))
-
-        // US '/' key (HID 0x38): base '-', shift '_'
-        put('-', Stroke(0, 0x38))
-        put('_', Stroke(SHIFT, 0x38))
     }
 
-    private val DEAD_MAP: Map<Char, List<Stroke>> = buildMap {
-        fun pair(dead: Stroke, follower: Char): List<Stroke> =
-            listOf(dead, DIRECT_MAP.getValue(follower))
-
-        // Standalone dead-key accents typed by following the dead key with Space
-        put('´', pair(DEAD_ACUTE, ' '))
-        put('¨', pair(DEAD_DIAERESIS, ' '))
-        put('^', pair(DEAD_CIRCUMFLEX, ' '))
-        put('`', pair(DEAD_GRAVE, ' '))
-
-        // Spanish acute accented vowels typed via dead acute key (US '[') + vowel
-        put('á', pair(DEAD_ACUTE, 'a'))
-        put('é', pair(DEAD_ACUTE, 'e'))
-        put('í', pair(DEAD_ACUTE, 'i'))
-        put('ó', pair(DEAD_ACUTE, 'o'))
-        put('ú', pair(DEAD_ACUTE, 'u'))
-        put('Á', pair(DEAD_ACUTE, 'A'))
-        put('É', pair(DEAD_ACUTE, 'E'))
-        put('Í', pair(DEAD_ACUTE, 'I'))
-        put('Ó', pair(DEAD_ACUTE, 'O'))
-        put('Ú', pair(DEAD_ACUTE, 'U'))
-
-        // Spanish diaeresis vowels typed via dead diaeresis key (Shift + US '[') + vowel
-        put('ü', pair(DEAD_DIAERESIS, 'u'))
-        put('Ü', pair(DEAD_DIAERESIS, 'U'))
+    /** One key's characters: plain, with Shift, with AltGr (null when it types nothing there or is a dead key). */
+    private fun MutableMap<Char, Stroke>.key(usage: Int, plain: Char?, shift: Char? = null, altGr: Char? = null) {
+        plain?.let { put(it, Stroke(0, usage)) }
+        shift?.let { put(it, Stroke(SHIFT, usage)) }
+        altGr?.let { put(it, Stroke(ALT_GR, usage)) }
     }
 
-    // The strokes that type [c] on the Latin American layout, in order (dead-key accents take two), or null if it can't be typed.
-    fun strokes(c: Char): List<Stroke>? {
-        DIRECT_MAP[c]?.let { return listOf(it) }
-        return DEAD_MAP[c]
+    private val LATAM: Map<Char, Stroke> = buildMap {
+        common()
+        key(0x35, '|', '°', '¬')
+        // Shift on 1..0.
+        for (i in 0 until 10) put("!\"#$%&/()="[i], Stroke(SHIFT, 0x1E + i))
+        key(0x2D, '\'', '?', '\\')
+        key(0x2E, '¿', '¡')
+        key(0x14, null, altGr = '@')
+        // ~ is a plain AltGr key here, not a dead one (checked against Windows).
+        key(0x30, '+', '*', '~')
+        key(0x33, 'ñ', 'Ñ')
+        key(0x34, '{', '[')
+        key(0x31, '}', ']')
+        key(0x64, '<', '>')
+        key(0x36, ',', ';')
+        key(0x37, '.', ':')
+        key(0x38, '-', '_')
+    }
+
+    private val SPAIN: Map<Char, Stroke> = buildMap {
+        common()
+        key(0x35, 'º', 'ª', '\\')
+        for (i in 0 until 10) put("!\"·$%&/()="[i], Stroke(SHIFT, 0x1E + i))
+        key(0x1E, null, altGr = '|')
+        key(0x1F, null, altGr = '@')
+        key(0x20, null, altGr = '#')
+        key(0x23, null, altGr = '¬')
+        key(0x08, null, altGr = '€')
+        key(0x2D, '\'', '?')
+        key(0x2E, '¡', '¿')
+        key(0x2F, null, altGr = '[')
+        key(0x30, '+', '*', ']')
+        key(0x33, 'ñ', 'Ñ')
+        key(0x34, null, altGr = '{')
+        key(0x31, 'ç', 'Ç', '}')
+        key(0x64, '<', '>')
+        key(0x36, ',', ';')
+        key(0x37, '.', ':')
+        key(0x38, '-', '_')
+    }
+
+    private val US: Map<Char, Stroke> = buildMap {
+        common()
+        key(0x35, '`', '~')
+        for (i in 0 until 10) put("!@#$%^&*()"[i], Stroke(SHIFT, 0x1E + i))
+        key(0x2D, '-', '_')
+        key(0x2E, '=', '+')
+        key(0x2F, '[', '{')
+        key(0x30, ']', '}')
+        key(0x31, '\\', '|')
+        key(0x33, ';', ':')
+        key(0x34, '\'', '"')
+        key(0x36, ',', '<')
+        key(0x37, '.', '>')
+        key(0x38, '/', '?')
+    }
+
+    /** The dead keys of a layout (acute, diaeresis, circumflex, grave) and what they type with the next key. */
+    private fun deadKeys(direct: Map<Char, Stroke>, acute: Stroke, diaeresis: Stroke, circumflex: Stroke, grave: Stroke): Map<Char, List<Stroke>> = buildMap {
+        fun pair(dead: Stroke, follower: Char) = listOf(dead, direct.getValue(follower))
+        // A dead key followed by Space types the accent on its own.
+        put('´', pair(acute, ' '))
+        put('¨', pair(diaeresis, ' '))
+        put('^', pair(circumflex, ' '))
+        put('`', pair(grave, ' '))
+        "aeiouAEIOU".forEachIndexed { i, v -> put("áéíóúÁÉÍÓÚ"[i], pair(acute, v)) }
+        put('ü', pair(diaeresis, 'u'))
+        put('Ü', pair(diaeresis, 'U'))
+    }
+
+    private val TABLES: Map<Layout, Pair<Map<Char, Stroke>, Map<Char, List<Stroke>>>> = mapOf(
+        Layout.LatAm to (LATAM to deadKeys(LATAM, acute = Stroke(0, 0x2F), diaeresis = Stroke(SHIFT, 0x2F), circumflex = Stroke(ALT_GR, 0x34), grave = Stroke(ALT_GR, 0x31))),
+        // ~ (AltGr+4) is a dead key too in Spain, unlike in Latin America.
+        Layout.Spain to (SPAIN to deadKeys(SPAIN, acute = Stroke(0, 0x34), diaeresis = Stroke(SHIFT, 0x34), circumflex = Stroke(SHIFT, 0x2F), grave = Stroke(0, 0x2F)) +
+            ('~' to listOf(Stroke(ALT_GR, 0x21), Stroke(0, SPACE)))),
+        // shortcut: US has no accents or ñ (Windows types those with Alt codes, which need Num Lock); they're skipped.
+        Layout.US to (US to emptyMap()),
+    )
+
+    /** The strokes that type [c] on [layout], in order (dead-key accents take two), or null if it can't be typed. */
+    fun strokes(c: Char, layout: Layout): List<Stroke>? {
+        val (direct, dead) = TABLES.getValue(layout)
+        direct[c]?.let { return listOf(it) }
+        return dead[c]
     }
 }

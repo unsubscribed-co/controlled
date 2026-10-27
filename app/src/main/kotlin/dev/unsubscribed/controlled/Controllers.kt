@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,7 +28,9 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,13 +69,15 @@ fun ControllerTitle(name: String, open: () -> Unit, modifier: Modifier = Modifie
 fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
     val t = LocalStrings.current
     var renaming by remember { mutableStateOf<Controller?>(null) }
+    var layoutOf by remember { mutableStateOf<PairedPc?>(null) }
     ModalBottomSheet(close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
             SheetTitle(t.controllers)
             val current = model.tv?.id ?: model.pc?.id
             for (c in model.controllers.all) {
                 ControllerRow(c, current = c.id == current, default = c.id == model.controllers.defaultOne()?.id,
-                    open = { model.select(c); close() }, rename = { renaming = c }, makeDefault = { model.setDefault(c) }, remove = { model.remove(c) })
+                    open = { model.select(c); close() }, rename = { renaming = c }, makeDefault = { model.setDefault(c) }, remove = { model.remove(c) },
+                    layout = (c as? PairedPc)?.let { { layoutOf = it } })
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilledTonalButton({ model.addTv(); close() }, Modifier.weight(1f).heightIn(min = 48.dp)) {
@@ -85,10 +92,36 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
         }
     }
     renaming?.let { c -> RenameDialog(c.name, { renaming = null }, pc = c is PairedPc) { model.renameController(c, it); renaming = null } }
+    layoutOf?.let { pc -> LayoutDialog(pc.layout, { layoutOf = null }) { model.setLayout(pc, it); layoutOf = null } }
+}
+
+/** Which keyboard layout the PC uses: one tap picks it. */
+@Composable
+private fun LayoutDialog(current: Layout, dismiss: () -> Unit, pick: (Layout) -> Unit) {
+    val t = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(t.keyboardLayout) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                Text(t.keyboardLayoutHint, Modifier.padding(bottom = 8.dp))
+                for (layout in Layout.entries) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(layout == current, role = Role.RadioButton) { pick(layout) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(layout == current, null)
+                        Text(when (layout) { Layout.LatAm -> t.layoutLatAm; Layout.Spain -> t.layoutSpain; Layout.US -> t.layoutUs }, Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(dismiss) { Text(t.cancel) } },
+    )
 }
 
 @Composable
-private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, open: () -> Unit, rename: () -> Unit, makeDefault: () -> Unit, remove: () -> Unit) {
+private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, open: () -> Unit, rename: () -> Unit, makeDefault: () -> Unit, remove: () -> Unit, layout: (() -> Unit)?) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
@@ -111,6 +144,7 @@ private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, ope
                     IconButton({ menu = true }, Modifier.size(48.dp)) { Icon(painterResource(R.drawable.sym_more_vert), t.more) }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem({ Text(t.rename) }, { menu = false; rename() })
+                        layout?.let { DropdownMenuItem({ Text(t.keyboardLayout) }, { menu = false; it() }, leadingIcon = { Icon(painterResource(R.drawable.sym_keyboard), null) }) }
                         if (!default) DropdownMenuItem({ Text(t.makeDefault) }, { menu = false; makeDefault() },
                             leadingIcon = { Icon(painterResource(R.drawable.sym_star), null) })
                         DropdownMenuItem({ Text(t.remove) }, { menu = false; remove() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })

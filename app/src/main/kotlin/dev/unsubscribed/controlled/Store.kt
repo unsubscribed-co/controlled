@@ -1,6 +1,8 @@
 package dev.unsubscribed.controlled
 
 import android.content.Context
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -35,7 +37,13 @@ data class PairedTv(
 
 /** A computer the phone types into and points at as a Bluetooth keyboard and mouse (PcHid.kt), by its Bluetooth address. */
 @Serializable
-data class PairedPc(val address: String, override val name: String) : Controller {
+data class PairedPc(
+    val address: String,
+    override val name: String,
+    // A PC saved before layouts existed typed Latin American; a new one starts from Layout.guess() (RemoteModel).
+    // Always written, so it never changes by itself.
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val layout: Layout = Layout.LatAm,
+) : Controller {
     override val id get() = "pc:$address"
 }
 

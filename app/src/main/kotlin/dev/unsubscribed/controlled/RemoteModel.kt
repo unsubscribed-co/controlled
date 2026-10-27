@@ -93,7 +93,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      * The phone as a Bluetooth keyboard and mouse; a computer that connects while adding one is saved as a PC. Null before
      * Android 9, which has no HID device profile: there the app doesn't offer Add a PC.
      */
-    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name -> if (screen == Screen.Pc && pc == null) savePc(PairedPc(address, name ?: "PC")) } else null
+    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name -> if (screen == Screen.Pc && pc == null) savePc(PairedPc(address, name ?: "PC", Layout.guess())) } else null
     var link by mutableStateOf(Link.Connecting)
         private set
     var volume by mutableStateOf<Int?>(null)
@@ -163,7 +163,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun start() {
         visible = true
         grace?.cancel()
-        if (screen == Screen.Pc) return hid?.start(pc?.address) ?: Unit
+        if (screen == Screen.Pc) {
+            pc?.let { hid?.layout = it.layout }
+            return hid?.start(pc?.address) ?: Unit
+        }
         if (screen == Screen.Find) return search()
         if (tv == null) return
         val c = client
@@ -289,6 +292,11 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             is PairedTv -> save(controller.copy(name = clean))
             is PairedPc -> savePc(controller.copy(name = clean))
         }
+    }
+
+    fun setLayout(controller: PairedPc, layout: Layout) {
+        savePc(controller.copy(layout = layout))
+        if (pc?.id == controller.id) hid?.layout = layout
     }
 
     private fun screenFor(controller: Controller?): Screen = when (controller) {

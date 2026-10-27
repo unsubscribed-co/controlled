@@ -1,5 +1,7 @@
-# Replays app/build/keymap.tsv (written by PcTest) through Windows' own "Spanish (Latin America)" layout and reports any
-# character whose key presses produce something else. Run on a Windows PC after :app:testDevDebugUnitTest.
+# Replays app/build/keymap-<KLID>.tsv (written by PcTest) through Windows' own layout and reports any character whose
+# key presses produce something else. Run on a Windows PC after :app:testProdDebugUnitTest, once per layout:
+#   0000080A Spanish (Latin America), 0000040A Spanish (Spain), 00000409 US.
+param([string]$Layout = '0000080A')
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
@@ -8,10 +10,10 @@ using System.Text;
 public static class Kb {
     [DllImport("user32.dll")] public static extern IntPtr LoadKeyboardLayout(string id, uint flags);
     [DllImport("user32.dll")] public static extern uint MapVirtualKeyEx(uint code, uint type, IntPtr hkl);
-    [DllImport("user32.dll")] public static extern int ToUnicodeEx(uint vk, uint scan, byte[] state, StringBuilder buf, int len, uint flags, IntPtr hkl);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ToUnicodeEx(uint vk, uint scan, byte[] state, StringBuilder buf, int len, uint flags, IntPtr hkl);
 }
 '@
-$hkl = [Kb]::LoadKeyboardLayout('0000080A', 0x80)
+$hkl = [Kb]::LoadKeyboardLayout($Layout, 0x80)
 # HID keyboard usage -> PC set-1 scan code, for the keys Keymap uses.
 $scan = @{}
 $letters = 0x1E,0x30,0x2E,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18,0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11,0x2D,0x15,0x2C
@@ -34,7 +36,7 @@ function Press([int]$mods, [int]$usage) {
 }
 
 $bad = 0
-foreach ($line in Get-Content (Join-Path $PSScriptRoot '..\app\build\keymap.tsv') -Encoding UTF8) {
+foreach ($line in Get-Content (Join-Path $PSScriptRoot "..\app\build\keymap-$Layout.tsv") -Encoding UTF8) {
     $code, $strokes = $line -split "`t"
     $want = [string][char][int]$code
     $got = ''
@@ -42,4 +44,4 @@ foreach ($line in Get-Content (Join-Path $PSScriptRoot '..\app\build\keymap.tsv'
     if ($want -eq "`n") { $want = "`r" }
     if ($got -ne $want) { $bad++; Write-Output ("MISMATCH U+{0:X4} want [{1}] got [{2}] via {3}" -f [int]$code, $want, $got, $strokes) }
 }
-Write-Output "checked; mismatches: $bad"
+Write-Output "$Layout checked; mismatches: $bad"
