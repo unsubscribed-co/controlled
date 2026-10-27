@@ -5,7 +5,7 @@
 |---|---|---|
 | Name | Controlled | Controlled Dev (plum icon) |
 | Package | `dev.unsubscribed.controlled` | `dev.unsubscribed.controlled.dev` |
-| Delivered by | Google Play, internal test (`unsubscribed/play-release` in Alejandría) | `https://dev.unsubscribed.dev/controlled/`, updates itself (latest.json) |
+| Delivered by | Google Play: internal test (list "Controlled testers"), plus a closed test "Alpha" toward going public (testers = Google Group `controlled-testers@googlegroups.com`, anyone can join; sent for review 2026-10-27). Production needs 12 testers opted in for 14 days in a row (`unsubscribed/play-release`). | `https://dev.unsubscribed.dev/controlled/`, updates itself (latest.json) |
 | Build | `./gradlew bundleProdRelease` | `./release.sh dev` (CI on every push to `main`) |
 
 `config.json` is the one place for URLs and the dev key's fingerprint. `local.properties` (never committed) holds this PC's paths and secrets:
