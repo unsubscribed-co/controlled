@@ -84,5 +84,4 @@ en-US: First release: a remote for LG webOS TVs. D-pad, volume, channels, power 
 - Target audience: 18+. Government: no. Financial features: none. Health: no. News: no.
 
 ## Store graphics
-- Icon and feature graphic: `docs/brand/art.py` (placeholder art). Phone screenshots: `docs/brand/screens/` (Juan's POCO X7 Pro with his TV, cropped to 1:2).
-- Before going public: screenshots show third-party app logos (Netflix, Disney+, HBO Max) from Juan's TV; consider ones without them.
+- Icon and feature graphic: `docs/brand/art.py` (placeholder art). Phone screenshots: `docs/brand/screens/` (EN + ES: remote, controllers, PC windows, PC system), made by `docs/brand/screens.py` from raw captures: status bar cropped, the TV's third-party app logos blurred, padded to 2:1.
