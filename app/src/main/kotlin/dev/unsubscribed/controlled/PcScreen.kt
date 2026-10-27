@@ -186,7 +186,7 @@ private fun TypeField(hid: PcHid) {
  * The PC's tools, in groups of eight under the trackpad (4 by 2, every one with a caption): Windows first, since moving
  * between and closing windows is what setting up a PC needs most. Shortcuts are Windows', as a keyboard would send them.
  */
-private enum class Tools { Windows, Tabs, Edit, Keys, Media }
+private enum class Tools { Windows, Tabs, Edit, System, Keys, Media }
 
 /** One shortcut: a caption under its icon (or a keycap when there's no icon), [name] for TalkBack, what it sends. */
 private class Shortcut(val icon: Int?, val caption: Strings.() -> String, val name: Strings.() -> String = caption, val repeat: Boolean = false, val send: PcHid.() -> Unit)
@@ -238,6 +238,18 @@ private val TOOLS: Map<Tools, List<Shortcut>> = mapOf(
         Shortcut(R.drawable.sym_keyboard_arrow_down, { down }, repeat = true) { key(0, Keymap.DOWN) },
         Shortcut(R.drawable.sym_keyboard_arrow_right, { right }, repeat = true) { key(0, Keymap.RIGHT) },
     ),
+    // What setting up a PC reaches for; the first row stays while typing.
+    Tools.System to listOf(
+        Shortcut(R.drawable.sym_desktop_windows, { showDesktop }, send = win(Keymap.letter('d'))),
+        Shortcut(R.drawable.sym_folder_open, { files }, { fileExplorer }, send = win(Keymap.letter('e'))),
+        Shortcut(R.drawable.sym_settings, { pcSettings }, send = win(Keymap.letter('i'))),
+        Shortcut(R.drawable.sym_browse_activity, { tasks }, { taskManager }) { key(Keymap.CTRL or Keymap.SHIFT, Keymap.ESC) },
+        Shortcut(R.drawable.sym_terminal, { runDialog }, send = win(Keymap.letter('r'))),
+        Shortcut(R.drawable.sym_lock, { lockPc }, send = win(Keymap.letter('l'))),
+        Shortcut(R.drawable.sym_screenshot_region, { snip }, { snipName }) { key(Keymap.GUI or Keymap.SHIFT, Keymap.letter('s')) },
+        // Windows takes Ctrl+Alt+Del from a Bluetooth keyboard too: the security screen (lock, switch user, sign out).
+        Shortcut(R.drawable.sym_shield, { ctrlAltDel }) { key(Keymap.CTRL or Keymap.ALT, Keymap.DELETE) },
+    ),
     Tools.Media to listOf(
         Shortcut(R.drawable.sym_skip_previous, { previous }) { media(Hid.PREVIOUS) },
         Shortcut(R.drawable.sym_play_arrow, { playPause }) { media(Hid.PLAY_PAUSE) },
@@ -265,7 +277,7 @@ private fun Pad(hid: PcHid) {
                     contentPadding = PaddingValues(horizontal = 4.dp),
                     // Without the check mark the fill is the only cue: inverse surface, so the chosen group stands out (>= 3:1).
                     colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.inverseSurface, activeContentColor = MaterialTheme.colorScheme.inverseOnSurface),
-                    label = { FitText(when (group) { Tools.Windows -> t.toolsWindows; Tools.Tabs -> t.toolsTabs; Tools.Edit -> t.toolsEdit; Tools.Keys -> t.toolsKeys; Tools.Media -> t.toolsMedia }, MaterialTheme.typography.labelMedium) },
+                    label = { FitText(when (group) { Tools.Windows -> t.toolsWindows; Tools.Tabs -> t.toolsTabs; Tools.Edit -> t.toolsEdit; Tools.System -> t.toolsSystem; Tools.Keys -> t.toolsKeys; Tools.Media -> t.toolsMedia }, MaterialTheme.typography.labelMedium) },
                 )
             }
         }

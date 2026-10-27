@@ -159,6 +159,18 @@ interface Strings {
     val deleteKey: String
     val toolsKeys: String
     val toolsMedia: String
+    val toolsSystem: String
+    val showDesktop: String
+    val files: String
+    val fileExplorer: String
+    val pcSettings: String
+    val tasks: String
+    val taskManager: String
+    val runDialog: String
+    val lockPc: String
+    val snip: String
+    val snipName: String
+    val ctrlAltDel: String
     val start: String
     val nextWindow: String
     val allWindows: String
@@ -327,6 +339,18 @@ object En : Strings {
     override val deleteKey = "Del"
     override val toolsKeys = "Keys"
     override val toolsMedia = "Media"
+    override val toolsSystem = "System"
+    override val showDesktop = "Desktop"
+    override val files = "Files"
+    override val fileExplorer = "File Explorer"
+    override val pcSettings = "Settings"
+    override val tasks = "Tasks"
+    override val taskManager = "Task Manager"
+    override val runDialog = "Run"
+    override val lockPc = "Lock"
+    override val snip = "Snip"
+    override val snipName = "Screenshot of an area"
+    override val ctrlAltDel = "Ctrl+Alt+Del"
     override val start = "Start"
     override val nextWindow = "Next"
     override val allWindows = "All windows"
@@ -494,6 +518,18 @@ object Es : Strings {
     override val deleteKey = "Supr"
     override val toolsKeys = "Teclas"
     override val toolsMedia = "Medios"
+    override val toolsSystem = "Sistema"
+    override val showDesktop = "Escritorio"
+    override val files = "Archivos"
+    override val fileExplorer = "Explorador de archivos"
+    override val pcSettings = "Configuración"
+    override val tasks = "Tareas"
+    override val taskManager = "Administrador de tareas"
+    override val runDialog = "Ejecutar"
+    override val lockPc = "Bloquear"
+    override val snip = "Recorte"
+    override val snipName = "Captura de una zona"
+    override val ctrlAltDel = "Ctrl+Alt+Supr"
     override val start = "Inicio"
     override val nextWindow = "Otra"
     override val allWindows = "Todas"
