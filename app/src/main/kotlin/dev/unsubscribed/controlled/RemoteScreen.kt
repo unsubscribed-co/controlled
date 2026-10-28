@@ -161,7 +161,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, switch: () -> Unit, onRenam
             StatusLine(model, tv)
         }
         Key(R.drawable.sym_power_settings_new, if (live) t.powerOff else t.powerOn, size = 48.dp, accent = !live,
-            enabled = model.link != Link.Waking && model.link != Link.CertificateChanged && model.link != Link.NoWifi) {
+            enabled = model.link != Link.CertificateChanged && model.link != Link.NoWifi) {
             if (live) model.powerOff() else model.powerOn()
         }
         Box {

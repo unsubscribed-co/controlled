@@ -437,6 +437,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         val paired = tv ?: return
         bleWake(paired)
         irWake(paired)
+        if (link == Link.Waking) return // Already waking: another press only fires the IR and Bluetooth shots again.
         val c = client
         if (c != null && link == Link.Connected) {
             // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
