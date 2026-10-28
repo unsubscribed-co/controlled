@@ -10,6 +10,15 @@
 >
 > Confirmed along the way: `Registration.wakeKey(0a:1b:2c:3d:4e:5f)` rebuilds ThinQ's captured key exactly, so the
 > key is ThinQ's random MAC + `07 00` (the header byte is 07 on air, not the 08 the decompiled code suggests).
+>
+> **Re-probed 2026-10-28 with a fully-registered client (scratchpad `asc_probe.py`, a bare WS client holding a real
+> client-key — `getPointerInputSocket` and `getPowerState` returned OK, proving full privileges). `registerDevice`
+> still answers `401 insufficient permissions` for `{type:ThinQ|Controlled|omitted, address}`, so the gate is on app
+> IDENTITY (LG signature), not on the permission list — requesting `CONTROL_BLUETOOTH`/`CONTROL_WAKEUP`/`CONTROL_TV_POWER`
+> changes nothing. `registerDevice` is the ONLY method on `com.webos.service.asc` (every other name 404 "no such
+> method"), and no other service registers a waker (bluetooth2, wol, connectionmanager, iot, homeconnect all 404). So
+> there is no network-side door we missed. The only clean no-ThinQ path left is a Developer-Mode app calling
+> `luna://com.webos.service.asc/registerDevice` locally (untested — different ACG permission model).**
 
 Follows `lg-power-on.md` (how the wake advertisement is built). This answers: how does ThinQ enrol an allowed waker, and
 can Controlled do the same? **Verdict: yes, and it needs no Bluetooth at all — one SSAP call over Wi-Fi.** Evidence is

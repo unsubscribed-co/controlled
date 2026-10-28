@@ -63,6 +63,13 @@ BLE-scan capture is designed but NOT built — see "ideas" below.)
   holds Juan's pairing; paste the captured key into its Bluetooth wake key menu when 1.3+ lands.
 - The dev app is GATT-paired to the TV from testing (harmless).
 
+## Bonded Bluetooth keyboard: doesn't wake it (2026-10-28)
+The phone bonds to the TV as a Bluetooth HID keyboard (dev trigger `--es hid to:<TV BT addr>`; the TV's own
+controller scan only lists gamepads, so the phone dials the TV). Keys reach it while it's on. Controlled test:
+`system/turnOff` over SSAP, the link dropped about a minute later, and the phone's reconnects every 10 s failed with
+the TV staying off for 90+ s. One earlier, uncontrolled off (random remote presses) came back on 5 s after the link
+dropped; unexplained, not reproduced. Wake-on-LAN brought it back 8 s after the test, a few minutes after off.
+
 ## Open ideas (not built)
 - ~~**In-app BLE key capture**~~ **Tested and ruled out (2026-10-27).**
   - **Scanning:** the phone does not hear its own adverts. Controlled advertised the wake key for 10 s while scanning in
