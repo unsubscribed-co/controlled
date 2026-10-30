@@ -2,7 +2,7 @@
 
 One remote for the devices at home, on your phone. From [Unsubscribed!](https://unsubscribed.dev): no ads, no subscriptions, no account, open source (AGPL-3.0).
 
-**Free, forever.** Controlled runs entirely on your phone and costs us nothing to run, so we will never charge for it. If we ever add something that does cost money to run, like an AI feature on a server, only that part could be paid: at cost, plus a small fee we show up front. Everything Controlled does today stays free.
+**Free, forever.** Controlled runs entirely on your phone and costs us nothing to run, so we will never charge for it. If we ever add something that does cost money to run, like an AI feature on a server, only that part could be paid: at cost, plus a 100% fee: of every dollar, 50¢ covers what it costs to run and 50¢ keeps the project going. Everything Controlled does today stays free.
 
 [Get it on Google Play](https://unsubscribed.dev/controlled/) · [Privacy](https://unsubscribed.dev/controlled/privacy/)
 
@@ -42,7 +42,7 @@ Signing, releases and the Play build: [docs/CONFIG.md](docs/CONFIG.md).
 
 ## About Unsubscribed!
 
-We build useful open-source apps. When an app costs us nothing to run, it's free forever. When it does (servers, AI), we run it for you at what it costs us, plus a small fee we tell you up front. No subscriptions, no ads, and your data is never sold. You can always take the code and run it yourself. [unsubscribed.dev](https://unsubscribed.dev)
+We build useful open-source apps. When an app costs us nothing to run, it's free forever. When it does (servers, AI), we run it for you at what it costs us, plus a 100% fee: half covers the running cost, half keeps the project going. No subscriptions, no ads, and your data is never sold. You can always take the code and run it yourself. [unsubscribed.dev](https://unsubscribed.dev)
 
 ## License
 
