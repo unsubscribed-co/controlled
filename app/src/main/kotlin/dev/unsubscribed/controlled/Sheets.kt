@@ -1,5 +1,6 @@
 package dev.unsubscribed.controlled
 
+import android.content.ClipboardManager
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -53,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -240,6 +242,7 @@ fun InputsSheet(model: RemoteModel, close: () -> Unit) {
 @Composable
 fun KeyboardSheet(model: RemoteModel) {
     val t = LocalStrings.current
+    val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -250,6 +253,12 @@ fun KeyboardSheet(model: RemoteModel) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go), keyboardActions = KeyboardActions(onGo = { model.enter() }),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The phone's clipboard goes into the TV's field as if typed.
+            Key(R.drawable.sym_content_paste, t.pasteFromPhone) {
+                context.getSystemService(ClipboardManager::class.java).primaryClip?.takeIf { it.itemCount > 0 }
+                    ?.getItemAt(0)?.coerceToText(context)?.toString()?.takeIf { it.isNotEmpty() }
+                    ?.let { clip -> model.typeChange(text, text + clip); text += clip }
+            }
             Spacer(Modifier.weight(1f))
             Key(R.drawable.sym_backspace, t.deleteChar, repeat = true) { model.delete(); text = text.dropLast(1) }
             Key(R.drawable.sym_keyboard_return, t.enter, onClick = model::enter)

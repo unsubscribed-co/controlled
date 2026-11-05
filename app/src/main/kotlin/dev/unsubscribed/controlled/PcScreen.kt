@@ -91,6 +91,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Surface
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -134,6 +136,7 @@ private fun PcStatus(link: PcLink) {
         PcLink.Waiting -> t.pcWaiting
         PcLink.Starting, PcLink.Off -> t.connecting
         PcLink.NoBluetooth -> t.pcNoBluetooth
+        PcLink.Unsupported -> t.pcUnsupported
     }
     Row(Modifier.heightIn(min = 32.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
         val dot = Modifier.size(8.dp).clip(CircleShape)
@@ -147,10 +150,20 @@ private fun PcStatus(link: PcLink) {
 private fun AddPc(model: RemoteModel) {
     val t = LocalStrings.current
     val visible = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    val hid = model.hid
+    // No computer after a while: the usual miss is the PC adding the phone while this screen wasn't open.
+    var slow by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(45_000); slow = true }
     BackHandler(onBack = model::cancelAdd)
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(painterResource(R.drawable.sym_computer), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+        hid?.stale?.let { pc ->
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.errorContainer) {
+                Text(t.pcStale(pc), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
         Text(t.addPcSteps, style = MaterialTheme.typography.bodyLarge)
+        if (slow && hid?.stale == null && hid?.link == PcLink.Waiting) Text(t.addPcSlow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button({ visible.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)) },
             Modifier.fillMaxWidth().height(56.dp)) { Text(t.makeVisible) }
         TextButton(model::cancelAdd, Modifier.fillMaxWidth()) { Text(t.backToControllers) }

@@ -1,5 +1,8 @@
 package dev.unsubscribed.controlled
 
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
@@ -84,7 +87,7 @@ fun App(model: RemoteModel, updateUrl: String?) {
             updateUrl?.let { UpdateBanner(it) }
             when (val screen = model.screen) {
                 Screen.Find -> FindScreen(model)
-                is Screen.Pairing -> PairingScreen(screen.tv, model::cancelPairing)
+                is Screen.Pairing -> if (screen.tv.brand == Brand.GoogleTv) CodeScreen(screen.tv, model) else PairingScreen(screen.tv, model::cancelPairing)
                 Screen.Remote -> RemoteScreen(model) { switching = true }
                 Screen.Pc -> PcScreen(model) { switching = true }
             }
@@ -152,7 +155,7 @@ private fun FindScreen(model: RemoteModel) {
             Surface(onClick = { model.pair(tv) }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 ListItem(
                     headlineContent = { Text(tv.name, style = MaterialTheme.typography.titleMedium) },
-                    supportingContent = tv.model?.let { { Text(it) } },
+                    supportingContent = (tv.model ?: t.googleTv.takeIf { tv.brand == Brand.GoogleTv })?.let { { Text(it) } },
                     trailingContent = { Text(tv.ip, style = MaterialTheme.typography.labelMedium) },
                     leadingContent = { Icon(painterResource(R.drawable.sym_tv), null, tint = MaterialTheme.colorScheme.primary) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -167,6 +170,7 @@ private fun FindScreen(model: RemoteModel) {
             } else {
                 Column {
                     if (model.found.isEmpty()) Text(t.noneFound, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (model.found.isEmpty() && model.vpn) Text(t.vpnNote, Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error)
                     TextButton(model::search) { Text(t.searchAgain) }
                 }
             }
@@ -190,6 +194,36 @@ private fun FindScreen(model: RemoteModel) {
                 Text(t.addPc, Modifier.padding(start = 8.dp))
             }
         }
+    }
+}
+
+/** A Google TV shows a 6-character code: type it here (hex digits; the keyboard offers letters and numbers). */
+@Composable
+private fun CodeScreen(tv: FoundTv, model: RemoteModel) {
+    val t = LocalStrings.current
+    var code by remember { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    BackHandler(onBack = model::cancelPairing)
+    val send = { if (code.length == 6) model.submitCode(code) }
+    Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(painterResource(R.drawable.sym_tv), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(24.dp))
+        Text(t.codeTitle(tv.name), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        Text(t.codeBody, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(24.dp))
+        OutlinedTextField(
+            code, { new -> code = new.filter { it.isLetterOrDigit() }.take(6).uppercase() }, Modifier.focusRequester(focus),
+            label = { Text(t.codeLabel) }, singleLine = true, isError = model.codeError,
+            supportingText = if (model.codeError) ({ Text(t.codeWrong) }) else null,
+            textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { send() }),
+        )
+        Spacer(Modifier.height(16.dp))
+        Button({ send() }, Modifier.height(48.dp), enabled = code.length == 6) { Text(t.connect) }
+        TextButton(model::cancelPairing, Modifier.height(48.dp)) { Text(t.cancel) }
     }
 }
 

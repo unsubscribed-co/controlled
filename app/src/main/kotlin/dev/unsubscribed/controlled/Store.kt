@@ -13,11 +13,16 @@ sealed interface Controller {
     val id: String
 }
 
+/** Which protocol a TV speaks: LG webOS (SSAP), or Android TV and Google TV (the Android TV Remote protocol, Gtv.kt). */
+enum class Brand { LG, GoogleTv }
+
 /**
  * A paired TV. [clientKey] skips the Accept prompt, [pin] is the TV's certificate
  * (SPKI SHA-256, trust on first use, null on the ws:// fallback), [macs] are its Wi-Fi and wired addresses for Wake-on-LAN.
  * [name] is what the person calls it (renameable). [pins] are app ids in the order pinned; [uses] counts launches per app id.
  * [bleKey] is the 8-byte key (16 hex digits) that lets Turn on reach the TV over Bluetooth from any sleep (BleWake.kt).
+ * [seen] are the Google TV apps (Gtv.APPS) seen open on it, so their tiles open them directly.
+ * [brand] picks the protocol; a Google TV's [clientKey] and [pin] are both its certificate pin (it pairs by certificate).
  * New fields have defaults, so files from older versions still load.
  */
 @Serializable
@@ -30,6 +35,8 @@ data class PairedTv(
     val pins: List<String> = emptyList(),
     val uses: Map<String, Int> = emptyMap(),
     val bleKey: String? = null,
+    val brand: Brand = Brand.LG,
+    val seen: List<String> = emptyList(),
 ) : Controller {
     // TVs are told apart by their key: their IP can change.
     override val id get() = "tv:$clientKey"

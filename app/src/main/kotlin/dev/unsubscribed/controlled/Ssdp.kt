@@ -20,7 +20,7 @@ import java.net.SocketTimeoutException
 import java.net.URI
 
 /** A TV that answered the search. [ip] is the address we connect to; [name] is friendlyName without a leading "[LG] ". */
-data class FoundTv(val ip: String, val name: String, val model: String?, val usn: String?)
+data class FoundTv(val ip: String, val name: String, val model: String?, val usn: String?, val brand: Brand = Brand.LG)
 
 object Ssdp {
     const val SEARCH_TARGET = "urn:lge-com:service:webos-second-screen:1"

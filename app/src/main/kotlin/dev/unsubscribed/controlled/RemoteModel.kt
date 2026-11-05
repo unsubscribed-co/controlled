@@ -22,7 +22,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
@@ -127,7 +126,18 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** App icons by app id, kept across reconnects (the URLs change every connection, the pictures don't). */
     val icons = mutableStateMapOf<String, ImageBitmap>()
 
+    /** The TV on screen is an Android TV or Google TV: no touchpad, inputs or Bluetooth wake; its apps are a fixed list. */
+    val isGtv get() = tv?.brand == Brand.GoogleTv
+    /** The code typed for a Google TV isn't the one on its screen. */
+    var codeError by mutableStateOf(false)
+        private set
+    /** The Google TV refused this phone's certificate: it was reset or its remotes were removed. Shown with Pair again. */
+    var forgotten by mutableStateOf(false)
+        private set
+
     private var client: TvClient? = null
+    private var gtv: GtvClient? = null
+    private var gtvPairing: GtvPairing? = null
     private var pointer: PointerSocket? = null
     private var session: Job? = null
     private var search: Job? = null
@@ -156,6 +166,9 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     init {
         cm.registerNetworkCallback(NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), wifi)
     }
+
+    /** This app's traffic goes through a VPN: one that takes the home network (Tailscale's subnet routes did) hides the TV. */
+    val vpn get() = cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
 
     private fun hasWifi() = cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
 
@@ -198,11 +211,18 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         search = viewModelScope.launch {
             searching = true
             try {
-                Ssdp.discover(getApplication()).collect { if (found.none { f -> f.ip == it.ip }) found += it }
+                // LG TVs answer SSDP, Google TVs announce themselves over mDNS: both searches at once, for as long.
+                val gtvs = launch { withTimeoutOrNull(5_000) { gtvDiscover(getApplication()).collect(::addFound) } }
+                Ssdp.discover(getApplication()).collect(::addFound)
+                gtvs.join()
             } finally {
                 searching = false
             }
         }
+    }
+
+    private fun addFound(tv: FoundTv) {
+        if (found.none { it.ip == tv.ip }) found += tv
     }
 
     /** Pairs with [found] (from the search, or typed by hand with a placeholder name). */
@@ -211,6 +231,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         findError = null
         session?.cancel()
         disconnect()
+        if (found.brand == Brand.GoogleTv) return pairGtv(found)
         session = viewModelScope.launch {
             val c = TvClient(found.ip, http)
             try {
@@ -231,7 +252,45 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A Google TV pairs with a code: this makes the TV show it, then [submitCode] sends it. */
+    private fun pairGtv(found: FoundTv) {
+        session = viewModelScope.launch {
+            try {
+                gtvPairing?.cancel()
+                gtvPairing = GtvPairing.start(found.ip)
+                codeError = false
+                screen = Screen.Pairing(found)
+            } catch (e: TvException) {
+                log { "gtv pairing failed: $e cause=${e.cause}" }
+                findError = if (e.kind == TvException.Kind.Rejected) FindError.Rejected else FindError.Unreachable
+                screen = Screen.Find
+            }
+        }
+    }
+
+    /** The code the Google TV shows; a typo keeps the pairing open to type it again. */
+    fun submitCode(code: String) {
+        val pairing = gtvPairing ?: return
+        val found = (screen as? Screen.Pairing)?.tv ?: return
+        viewModelScope.launch {
+            try {
+                val pin = pairing.finish(code) ?: run { codeError = true; return@launch }
+                gtvPairing = null
+                save(PairedTv(found.ip, found.name, clientKey = pin, pin = pin, brand = Brand.GoogleTv))
+                screen = Screen.Remote
+                connect()
+            } catch (e: TvException) {
+                gtvPairing = null
+                findError = FindError.Rejected
+                screen = Screen.Find
+                search()
+            }
+        }
+    }
+
     fun cancelPairing() {
+        gtvPairing?.cancel()
+        gtvPairing = null
         session?.cancel()
         disconnect()
         screen = Screen.Find
@@ -243,12 +302,20 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         tv?.let(::remove)
     }
 
+    /** The TV forgot this phone: drop it and pair again at the same address, straight to the TV's code. */
+    fun repair() {
+        val paired = tv ?: return
+        remove(paired)
+        pair(FoundTv(paired.ip, paired.name, null, null, paired.brand))
+    }
+
     /** Opens [controller]: the TV remote or the PC pad; null finds a TV. Only the one on screen holds a connection. */
     fun select(controller: Controller?) {
         session?.cancel()
         disconnect()
         search?.cancel()
         link = Link.Connecting
+        forgotten = false
         if (controller !is PairedPc) hid?.stop()
         if (controller !is PairedTv || controller.id != tv?.id) {
             apps.clear()
@@ -349,7 +416,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** Saves [paired] in its place (a TV re-paired at the same address replaces its old entry); the first one is the default. */
     private fun save(paired: PairedTv) {
         val tvs = controllers.tvs.toMutableList()
-        val i = tvs.indexOfFirst { it.id == paired.id || it.ip == paired.ip }
+        // Same address only replaces the same brand: an LG and a Google TV on two networks can share 192.168.0.x.
+        val i = tvs.indexOfFirst { it.id == paired.id || (it.ip == paired.ip && it.brand == paired.brand) }
         if (i >= 0) tvs[i] = paired else tvs += paired
         val old = controllers.tvs.getOrNull(i)?.id
         val default = if (controllers.default == null || controllers.default == old) paired.id else controllers.default
@@ -382,6 +450,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         }
         session?.cancel()
         disconnect()
+        if (paired.brand == Brand.GoogleTv) {
+            session = viewModelScope.launch { gtvLoop() }
+            return
+        }
         session = viewModelScope.launch {
             var attempt = 0
             var searched = false
@@ -412,14 +484,82 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         if (paired.macs.isEmpty()) log { "no MACs stored: power on unavailable" }
     }
 
-    /** The TV may have a new address: try every LG TV the search finds with our key; the one that accepts it is ours. */
+    /** [connect] for a Google TV: the same retry schedule and the same one look for a new address. */
+    private suspend fun gtvLoop() {
+        var attempt = 0
+        var searched = false
+        if (link != Link.Off) link = Link.Connecting
+        while (true) {
+            val current = tv ?: return
+            val g = GtvClient(current.ip, current.pin ?: return)
+            try {
+                g.open()
+                attempt = 0
+                runGtv(g)
+            } catch (e: TvException) {
+                g.close()
+                log { "gtv connect failed: ${e.kind} $e cause=${e.cause}" }
+                if (e.kind == TvException.Kind.CertificateChanged || e.kind == TvException.Kind.Rejected) {
+                    forgotten = e.kind == TvException.Kind.Rejected
+                    link = Link.CertificateChanged
+                    return
+                }
+                if (attempt >= 1) link = Link.Off
+                if (attempt >= 2 && !searched) {
+                    searched = true
+                    if (refind(current)) continue
+                }
+            }
+            if (!visible) return
+            delay(retryDelay(attempt++))
+        }
+    }
+
+    /** Connected to a Google TV: its fixed app list, then its state until the socket closes. */
+    private suspend fun runGtv(g: GtvClient) {
+        gtv = g
+        link = Link.Connected
+        apps.clear()
+        apps += Gtv.APPS.map { TvApp(it.id, it.title, null) }
+        val watchers = listOf(
+            // Off reads as LG's standby, so the header and status line offer Turn on the same way.
+            viewModelScope.launch { g.on.collect { log { "gtv on=$it" }; powerState = if (it == false) "Active Standby" else null } },
+            viewModelScope.launch {
+                g.app.collect { id ->
+                    foreground = id
+                    val paired = tv
+                    if (id != null && paired != null && Gtv.app(id) != null && id !in paired.seen) save(paired.copy(seen = paired.seen + id))
+                }
+            },
+            viewModelScope.launch { g.volume.collect { v -> v?.let { volume = it.first; muted = it.second } } },
+        )
+        try {
+            g.closed.first { it }
+        } finally {
+            watchers.forEach { it.cancel() }
+            if (gtv === g) {
+                disconnect()
+                if (link == Link.Connected) link = Link.Connecting
+            }
+        }
+    }
+
+    /** The TV may have a new address: try every TV of its brand the search finds with our key; the one that accepts it is ours. */
     private suspend fun refind(current: PairedTv): Boolean {
-        val candidates = withTimeoutOrNull(3_500) { Ssdp.discover(getApplication(), 3_000).take(8).toList() }
-            ?: return false
+        val gtv = current.brand == Brand.GoogleTv
+        // The mDNS search never ends by itself: keep what it found when the time is up.
+        val candidates = mutableListOf<FoundTv>()
+        withTimeoutOrNull(3_500) {
+            (if (gtv) gtvDiscover(getApplication()) else Ssdp.discover(getApplication(), 3_000)).take(8).collect { candidates += it }
+        }
         for (f in candidates.filter { it.ip != current.ip }) {
-            val c = TvClient(f.ip, http)
-            val ok = runCatching { c.connect(current.clientKey, current.pin) }.isSuccess
-            c.close()
+            val ok = if (gtv) {
+                val g = GtvClient(f.ip, current.pin ?: return false)
+                runCatching { g.open() }.isSuccess.also { g.close() }
+            } else {
+                val c = TvClient(f.ip, http)
+                runCatching { c.connect(current.clientKey, current.pin) }.isSuccess.also { c.close() }
+            }
             if (ok) {
                 log { "TV moved: ${current.ip} -> ${f.ip}" }
                 save(current.copy(ip = f.ip))
@@ -435,6 +575,9 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      */
     fun powerOn() {
         val paired = tv ?: return
+        // shortcut: assumes a Google TV in standby keeps its remote port open, so Power there wakes it; not measured
+        // yet. Off the network it only reconnects (no Wake-on-LAN or IR for these yet).
+        if (paired.brand == Brand.GoogleTv) return if (link == Link.Connected) gtvKey(Gtv.POWER) else connect()
         bleWake(paired)
         irWake(paired)
         if (link == Link.Waking) return // Already waking: another press only fires the IR and Bluetooth shots again.
@@ -602,6 +745,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         pointer = null
         client?.close()
         client = null
+        gtv?.close()
+        gtv = null
         tvKeyboard = false
         powerState = null
     }
@@ -615,10 +760,22 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         if (link == Link.Off || link == Link.Connected) connect()
     }
 
-    fun button(name: String) = press { c, p ->
-        // The pointer socket can drop alone: reopen it and send the press there.
-        if (p?.button(name) != true) viewModelScope.launch {
-            runCatching { c.pointer() }.getOrNull()?.let { fresh -> pointer = fresh; fresh.button(name) }
+    /** A Google TV's press: sent when connected, else it starts a reconnect (no queue: shortcut, add one if missed). */
+    private fun gtvPress(action: (GtvClient) -> Unit) {
+        val g = gtv
+        if (g != null && link == Link.Connected) return action(g)
+        if (link == Link.Off || link == Link.Connected) connect()
+    }
+
+    private fun gtvKey(code: Int) = gtvPress { it.key(code) }
+
+    fun button(name: String) {
+        if (isGtv) return Gtv.BUTTONS[name]?.let(::gtvKey) ?: Unit
+        press { c, p ->
+            // The pointer socket can drop alone: reopen it and send the press there.
+            if (p?.button(name) != true) viewModelScope.launch {
+                runCatching { c.pointer() }.getOrNull()?.let { fresh -> pointer = fresh; fresh.button(name) }
+            }
         }
     }
 
@@ -626,26 +783,29 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { runCatching { c.request(uri, payload) } }
     }
 
-    fun volumeUp() = request("audio/volumeUp")
-    fun volumeDown() = request("audio/volumeDown")
-    fun toggleMute() = request("audio/setMute", buildJsonObject { put("mute", !muted) })
-    fun channelUp() = request("tv/channelUp")
-    fun channelDown() = request("tv/channelDown")
-    fun play() = request("media.controls/play")
-    fun pause() = request("media.controls/pause")
+    fun volumeUp() = if (isGtv) gtvKey(Gtv.VOLUME_UP) else request("audio/volumeUp")
+    fun volumeDown() = if (isGtv) gtvKey(Gtv.VOLUME_DOWN) else request("audio/volumeDown")
+    fun toggleMute() = if (isGtv) gtvKey(Gtv.MUTE) else request("audio/setMute", buildJsonObject { put("mute", !muted) })
+    fun channelUp() = if (isGtv) gtvKey(Gtv.CHANNEL_UP) else request("tv/channelUp")
+    fun channelDown() = if (isGtv) gtvKey(Gtv.CHANNEL_DOWN) else request("tv/channelDown")
+    fun play() = if (isGtv) gtvKey(Gtv.PLAY) else request("media.controls/play")
+    fun pause() = if (isGtv) gtvKey(Gtv.PAUSE) else request("media.controls/pause")
 
     // The TV answers turnOff unreliably as it shuts down, so don't wait for it.
     fun powerOff() {
-        client?.fire("system/turnOff")
+        if (isGtv) gtv?.key(Gtv.POWER) else client?.fire("system/turnOff")
     }
 
     fun launch(app: TvApp) {
-        request("system.launcher/launch", buildJsonObject { put("id", app.id) })
+        if (isGtv) Gtv.launchLink(app.id, tv?.seen.orEmpty())?.let { link -> gtvPress { it.launch(link) } }
+        else request("system.launcher/launch", buildJsonObject { put("id", app.id) })
         tv?.let { save(it.copy(uses = it.uses + (app.id to (it.uses[app.id] ?: 0) + 1))) }
     }
 
     /** "Play on TV" from the share sheet: false when the text has no link. */
     fun share(text: String): Boolean {
+        // A Google TV takes the link itself and opens it in the app that claims it.
+        if (isGtv) return Regex("""https?://\S+""").find(text)?.value?.let { link -> gtvPress { it.launch(link) }; true } ?: false
         pendingShare = shareLaunch(text) ?: return false
         val c = client
         if (c != null && link == Link.Connected) sendShare(c) else if (link == Link.Off || link == Link.Connected) connect()
@@ -672,12 +832,13 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun typeChange(before: String, after: String) {
         val common = before.commonPrefixWith(after).length
         val deletes = before.length - common
+        if (isGtv) return gtvPress { g -> repeat(deletes) { g.key(Gtv.DEL) }; g.text(after.substring(common)) }
         if (deletes > 0) request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", deletes) })
         if (after.length > common) request("com.webos.service.ime/insertText", buildJsonObject { put("text", after.substring(common)); put("replace", 0) })
     }
 
-    fun enter() = request("com.webos.service.ime/sendEnterKey")
-    fun delete() = request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", 1) })
+    fun enter() = if (isGtv) gtvKey(Gtv.ENTER) else request("com.webos.service.ime/sendEnterKey")
+    fun delete() = if (isGtv) gtvKey(Gtv.DEL) else request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", 1) })
 
     fun move(dx: Int, dy: Int) {
         pointer?.move(dx, dy)

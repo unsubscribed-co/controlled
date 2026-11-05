@@ -62,6 +62,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -92,7 +95,7 @@ fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Header(model, tv, switch, onRename = { renaming = true }, onBleKey = { editingKey = true })
-            if (model.link == Link.CertificateChanged) CertificateNotice(model::forget)
+            if (model.link == Link.CertificateChanged) CertificateNotice(model.forgotten, if (model.forgotten) model::repair else model::forget)
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val width = maxWidth
                 val height = maxHeight
@@ -106,7 +109,7 @@ fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Dock(model, tv, enabled) { sheet = Sheet.Apps }
                         Rockers(model, enabled)
-                        BottomRow(enabled) { sheet = it }
+                        BottomRow(enabled, model.isGtv) { sheet = it }
                     }
                 } else {
                     // Fills the height when there's room; scrolls on small phones instead of squeezing the keys.
@@ -119,7 +122,7 @@ fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
                         DPad(model, enabled, min(width * 0.7f, 248.dp))
                         NavPills(model, enabled)
                         Rockers(model, enabled)
-                        BottomRow(enabled) { sheet = it }
+                        BottomRow(enabled, model.isGtv) { sheet = it }
                     }
                 }
             }
@@ -169,7 +172,7 @@ private fun Header(model: RemoteModel, tv: PairedTv, switch: () -> Unit, onRenam
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem({ Text(t.rename) }, { menu = false; onRename() }, leadingIcon = { Icon(painterResource(R.drawable.sym_tv), null) })
                 DropdownMenuItem({ Text(t.forgetTv) }, { menu = false; model.forget() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })
-                DropdownMenuItem({ Text(t.bleKey) }, { menu = false; onBleKey() })
+                if (!model.isGtv) DropdownMenuItem({ Text(t.bleKey) }, { menu = false; onBleKey() })
                 DropdownMenuItem({ Text(t.privacy) }, { menu = false; uri.openUri(BuildConfig.PRIVACY_URL) })
                 DropdownMenuItem({ Text(t.sourceCode) }, { menu = false; uri.openUri(BuildConfig.SOURCE_URL) })
             }
@@ -197,7 +200,7 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         Link.Connected -> if (sleeping) t.tvOff else model.foregroundName()?.let { t.nowOn(it) }
         Link.Connecting -> if (slow) t.connecting else null
         Link.Waking -> t.turningOn
-        Link.Off -> if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
+        Link.Off -> if (model.vpn) t.vpnNote else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
         Link.NoWifi -> t.noWifi
         Link.CertificateChanged -> null
     }
@@ -231,12 +234,12 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
 }
 
 @Composable
-private fun CertificateNotice(forget: () -> Unit) {
+private fun CertificateNotice(forgotten: Boolean, action: () -> Unit) {
     val t = LocalStrings.current
     Surface(Modifier.fillMaxWidth().padding(16.dp), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.errorContainer) {
         Column(Modifier.padding(16.dp)) {
-            Text(t.certificateChanged, color = MaterialTheme.colorScheme.onErrorContainer)
-            Button(forget, Modifier.align(Alignment.End)) { Text(t.forgetTv) }
+            Text(if (forgotten) t.tvForgot else t.certificateChanged, color = MaterialTheme.colorScheme.onErrorContainer)
+            Button(action, Modifier.align(Alignment.End)) { Text(if (forgotten) t.pairAgain else t.forgetTv) }
         }
     }
 }
@@ -283,8 +286,12 @@ fun AppTile(app: TvApp, model: RemoteModel, modifier: Modifier, enabled: Boolean
 @Composable
 fun AppIcon(app: TvApp, model: RemoteModel, modifier: Modifier) {
     val icon = model.icons[app.id]
-    Box(modifier.aspectRatio(1f).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+    // A Google TV gives no icons: its apps get their brand's colour and a short mark; the name is under the tile.
+    val brand = if (model.isGtv) Gtv.app(app.id) else null
+    Box(modifier.aspectRatio(1f).clip(MaterialTheme.shapes.medium).background(brand?.let { Color(it.color) } ?: MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
         if (icon != null) Image(icon, null, Modifier.fillMaxSize())
+        else if (brand != null) Text(brand.mark, color = Color(brand.onColor), style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black, textAlign = TextAlign.Center, maxLines = 1)
         else Text(app.title.take(1).uppercase(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
@@ -351,10 +358,12 @@ private fun Rocker(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun BottomRow(enabled: Boolean, open: (Sheet) -> Unit) {
+private fun BottomRow(enabled: Boolean, gtv: Boolean, open: (Sheet) -> Unit) {
     val t = LocalStrings.current
+    val sheets = listOf(Triple(Sheet.Keyboard, R.drawable.sym_keyboard, t.keyboard), Triple(Sheet.Touchpad, R.drawable.sym_touch_app, t.touchpad), Triple(Sheet.Inputs, R.drawable.sym_input, t.inputs))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for ((sheet, icon, label) in listOf(Triple(Sheet.Keyboard, R.drawable.sym_keyboard, t.keyboard), Triple(Sheet.Touchpad, R.drawable.sym_touch_app, t.touchpad), Triple(Sheet.Inputs, R.drawable.sym_input, t.inputs))) {
+        // A Google TV has no pointer and no input list over this protocol: only Type.
+        for ((sheet, icon, label) in if (gtv) sheets.take(1) else sheets) {
             Surface({ open(sheet) }, Modifier.weight(1f).height(64.dp), enabled = enabled, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(painterResource(icon), null)

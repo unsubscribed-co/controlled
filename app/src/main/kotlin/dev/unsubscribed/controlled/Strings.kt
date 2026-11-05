@@ -27,6 +27,12 @@ interface Strings {
     val noAnswer: String
     fun pairingTitle(tv: String): String
     val pairingBody: String
+    /** A Google TV pairs by a code it shows: the title, what to do, the field, a wrong code, and its label in the list. */
+    fun codeTitle(tv: String): String
+    val codeBody: String
+    val codeLabel: String
+    val codeWrong: String
+    val googleTv: String
     /** The countdown inside the pairing ring, for TalkBack: "52 seconds left". */
     fun secondsLeft(seconds: Int): String
     val cancel: String
@@ -41,6 +47,11 @@ interface Strings {
     val wakeHint: String
     fun nowOn(name: String): String
     val certificateChanged: String
+    /** A Google TV no longer has this phone paired, and its button. */
+    val tvForgot: String
+    val pairAgain: String
+    /** A VPN carries this app's traffic and may be hiding the home network. */
+    val vpnNote: String
     val forgetTv: String
     val privacy: String
     val sourceCode: String
@@ -102,6 +113,8 @@ interface Strings {
     val typeHint: String
     val enter: String
     val deleteChar: String
+    /** Type: puts the phone's clipboard into the TV's field. */
+    val pasteFromPhone: String
     val touchpadHint: String
     val close: String
 
@@ -124,6 +137,12 @@ interface Strings {
     val pcWaiting: String
     val pcConnected: String
     val pcNoBluetooth: String
+    /** The phone refuses to act as a Bluetooth keyboard (some makers turn it off). */
+    val pcUnsupported: String
+    /** A computer paired before has the phone saved without the keyboard: remove it there and add it again. */
+    fun pcStale(pc: String): String
+    /** Adding a PC is taking long: the likely miss. */
+    val addPcSlow: String
     val pcPermission: String
     val addPcTitle: String
     val addPcSteps: String
@@ -208,7 +227,7 @@ object En : Strings {
     override val openSettings = "Open settings"
 
     override val findTitle = "Pick your TV"
-    override val searching = "Looking for LG TVs on this Wi-Fi…"
+    override val searching = "Looking for TVs on this Wi-Fi…"
     override val noneFound = "No TV found. Check that the TV is on and on the same Wi-Fi, or type its address."
     override val searchAgain = "Search again"
     override val typeAddress = "TV address"
@@ -219,6 +238,11 @@ object En : Strings {
     override val noAnswer = "No answer from the TV. Try again and choose Accept on the TV."
     override fun pairingTitle(tv: String) = "Accept on $tv"
     override val pairingBody = "Your TV is asking whether to let this phone control it. Choose Accept with the TV's remote. You only do this once."
+    override fun codeTitle(tv: String) = "Type the code on $tv"
+    override val codeBody = "Your TV is showing a 6-character code. Type it here to let this phone control it. You only do this once."
+    override val codeLabel = "Code on the TV"
+    override val codeWrong = "That isn't the code on the TV. Check it and type it again."
+    override val googleTv = "Google TV"
     override fun secondsLeft(seconds: Int) = if (seconds == 1) "1 second left" else "$seconds seconds left"
     override val cancel = "Cancel"
 
@@ -230,6 +254,9 @@ object En : Strings {
     override val wakeHint = "The TV didn't wake. On the TV, turn on Settings > General > Devices > Mobile TV On > Turn on via Wi-Fi"
     override fun nowOn(name: String) = "On now: $name"
     override val certificateChanged = "This TV's security certificate changed. If you replaced or reset the TV, forget it and pair again."
+    override val tvForgot = "This TV no longer knows this phone: it was reset, or its remotes were removed. Pair it again."
+    override val pairAgain = "Pair again"
+    override val vpnNote = "Can't reach the TV. A VPN is on in this phone: if it covers your home network, exclude Controlled in the VPN app."
     override val forgetTv = "Forget this TV"
     override val privacy = "Privacy policy"
     override val sourceCode = "Source code"
@@ -291,6 +318,7 @@ object En : Strings {
     override val typeHint = "Type here, it appears on the TV as you type"
     override val enter = "Enter"
     override val deleteChar = "Delete"
+    override val pasteFromPhone = "Paste from phone"
     override val touchpadHint = "Drag to move, tap to click, two fingers to scroll"
     override val close = "Close"
 
@@ -312,6 +340,9 @@ object En : Strings {
     override val pcWaiting = "Waiting for the PC…"
     override val pcConnected = "Connected"
     override val pcNoBluetooth = "Turn on Bluetooth to use the PC"
+    override val pcUnsupported = "This phone can't act as a Bluetooth keyboard, so it can't control a PC"
+    override fun pcStale(pc: String) = "$pc has this phone saved without the keyboard, so it can't control it. On $pc, open Settings > Bluetooth & devices, remove this phone, then add it again with the steps below."
+    override val addPcSlow = "Still waiting? Keep this screen open while the PC adds the phone. If the PC already lists this phone, remove it there and add it again."
     override val pcPermission = "Controlled works as a Bluetooth keyboard and mouse for your PC. Android will ask to let it connect to nearby devices."
     override val addPcTitle = "Add a PC"
     override val addPcSteps = "1. Tap Make this phone visible.\n2. On the PC: Settings > Bluetooth & devices > Add device > Bluetooth, and pick this phone.\n3. Confirm the code on both."
@@ -395,7 +426,7 @@ object Es : Strings {
     override val openSettings = "Abrir ajustes"
 
     override val findTitle = "Elige tu televisor"
-    override val searching = "Buscando televisores LG en este Wi-Fi…"
+    override val searching = "Buscando televisores en este Wi-Fi…"
     override val noneFound = "No encontramos ningún televisor. Revisa que esté encendido y en el mismo Wi-Fi, o escribe su dirección."
     override val searchAgain = "Buscar de nuevo"
     override val typeAddress = "Dirección del TV"
@@ -406,6 +437,11 @@ object Es : Strings {
     override val noAnswer = "El televisor no respondió. Intenta de nuevo y elige Aceptar en el TV."
     override fun pairingTitle(tv: String) = "Acepta en $tv"
     override val pairingBody = "Tu televisor está preguntando si este celular puede controlarlo. Elige Aceptar con el control del televisor. Solo tienes que hacerlo una vez."
+    override fun codeTitle(tv: String) = "Escribe el código de $tv"
+    override val codeBody = "Tu televisor muestra un código de 6 caracteres. Escríbelo aquí para que este celular pueda controlarlo. Solo tienes que hacerlo una vez."
+    override val codeLabel = "Código del televisor"
+    override val codeWrong = "Ese no es el código del televisor. Revísalo y escríbelo otra vez."
+    override val googleTv = "Google TV"
     override fun secondsLeft(seconds: Int) = if (seconds == 1) "Queda 1 segundo" else "Quedan $seconds segundos"
     override val cancel = "Cancelar"
 
@@ -417,6 +453,9 @@ object Es : Strings {
     override val wakeHint = "El TV no encendió. En el TV, activa Configuración > General > Dispositivos > Encender TV con móvil > Encender por Wi-Fi"
     override fun nowOn(name: String) = "Ahora: $name"
     override val certificateChanged = "El certificado de seguridad de este televisor cambió. Si reemplazaste o restableciste el TV, olvídalo y vincúlalo de nuevo."
+    override val tvForgot = "Este televisor ya no reconoce este celular: lo restablecieron o le quitaron los controles. Vincúlalo de nuevo."
+    override val pairAgain = "Vincular de nuevo"
+    override val vpnNote = "No llegamos al televisor. Este celular tiene una VPN activa: si cubre la red de tu casa, excluye Controlled en la app de la VPN."
     override val forgetTv = "Olvidar este TV"
     override val privacy = "Política de privacidad"
     override val sourceCode = "Código fuente"
@@ -478,6 +517,7 @@ object Es : Strings {
     override val typeHint = "Escribe aquí, se verá en el televisor mientras escribes"
     override val enter = "Enter"
     override val deleteChar = "Borrar"
+    override val pasteFromPhone = "Pegar del celular"
     override val touchpadHint = "Arrastra para mover, toca para hacer clic, dos dedos para desplazarte"
     override val close = "Cerrar"
 
@@ -499,6 +539,9 @@ object Es : Strings {
     override val pcWaiting = "Esperando al PC…"
     override val pcConnected = "Conectado"
     override val pcNoBluetooth = "Activa el Bluetooth para usar el PC"
+    override val pcUnsupported = "Este teléfono no puede funcionar como teclado Bluetooth, así que no puede controlar un PC"
+    override fun pcStale(pc: String) = "$pc tiene guardado este teléfono sin el teclado, así que no puede controlarlo. En $pc, abre Configuración > Bluetooth y dispositivos, quita este teléfono y agrégalo otra vez con los pasos de abajo."
+    override val addPcSlow = "¿Sigue esperando? Deja esta pantalla abierta mientras el PC agrega el teléfono. Si el PC ya muestra este teléfono, quítalo ahí y agrégalo otra vez."
     override val pcPermission = "Controlled funciona como teclado y mouse Bluetooth para tu PC. Android te pedirá permiso para conectarse a dispositivos cercanos."
     override val addPcTitle = "Agregar un PC"
     override val addPcSteps = "1. Toca Hacer visible este teléfono.\n2. En el PC: Configuración > Bluetooth y dispositivos > Agregar dispositivo > Bluetooth, y elige este teléfono.\n3. Confirma el código en ambos."

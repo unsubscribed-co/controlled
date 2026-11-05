@@ -1,6 +1,7 @@
 package dev.unsubscribed.controlled
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
@@ -20,8 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.util.concurrent.Executor
 
-/** The PC link: the phone as a Bluetooth keyboard and mouse. */
-enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth }
+/** The PC link: the phone as a Bluetooth keyboard and mouse. Unsupported: Bluetooth is on, but this phone refuses to be one. */
+enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported }
 
 /**
  * The phone as a Bluetooth keyboard + mouse + media keys (Android's HID device profile), so a PC needs nothing installed.
@@ -37,6 +38,15 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     var link by mutableStateOf(PcLink.Off)
         private set
+    /**
+     * While adding: the name of a computer this phone is paired with that refused the keyboard. It saved the phone without
+     * it (paired while this screen wasn't open), so it has to remove the phone and add it again; the phone can't fix that.
+     */
+    var stale by mutableStateOf<String?>(null)
+        private set
+    /** Computers already paired with this phone, tried one at a time while adding (see [probeNext]). */
+    private val probing = ArrayDeque<BluetoothDevice>()
+    private var probe: BluetoothDevice? = null
 
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
@@ -50,7 +60,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
             log { "hid registered=$registered plugged=${pluggedDevice?.address}" }
             if (!registered) { host = null; if (hid != null) link = PcLink.Waiting; return }
             link = PcLink.Waiting
-            val t = target ?: return
+            val t = target ?: return probeBonded()
             val d = adapter?.getRemoteDevice(t) ?: return
             // The PC may have reconnected by itself before we registered: no state change follows, so take it as is.
             if (safely { hid?.getConnectionState(d) == BluetoothProfile.STATE_CONNECTED }) onConnectionStateChanged(d, BluetoothProfile.STATE_CONNECTED)
@@ -60,8 +70,16 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             log { "hid ${device.address} state=$state" }
+            if (probe?.address == device.address && state != BluetoothProfile.STATE_CONNECTING) {
+                probe = null
+                // Refused without ever connecting: that computer has the phone saved without the keyboard.
+                if (state == BluetoothProfile.STATE_DISCONNECTED) stale = device.name ?: device.address
+                if (state != BluetoothProfile.STATE_CONNECTED) probeNext()
+            }
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    stale = null
+                    probing.clear()
                     host = device
                     link = PcLink.Connected
                     onHost(device.address, device.name)
@@ -78,7 +96,8 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             val h = proxy as BluetoothHidDevice
             hid = h
-            if (!register(h)) link = PcLink.NoBluetooth
+            // Bluetooth is on (checked before asking): a refusal here is the phone not offering the keyboard role.
+            if (!register(h)) link = PcLink.Unsupported
         }
 
         override fun onServiceDisconnected(profile: Int) {
@@ -88,11 +107,30 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         }
     }
 
+    /**
+     * Adding a PC: a computer already paired with this phone either connects as a keyboard (and is saved, as a new one
+     * would be) or refuses it, which [stale] reports. Only computers: headphones and cars aren't asked.
+     */
+    private fun probeBonded() {
+        probing.clear()
+        probing += adapter?.bondedDevices.orEmpty().filter { it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER }
+        probeNext()
+    }
+
+    // One at a time: a second connect while one is paging kills the first.
+    private fun probeNext() {
+        if (target != null || host != null) return
+        val d = probing.removeFirstOrNull() ?: return
+        probe = d
+        if (!safely { hid?.connect(d) == true }) { probe = null; probeNext() }
+    }
+
     /** Opens the link to the PC at [address], or with null waits for a new computer to pair and connect. */
     fun start(address: String?) {
         // Without Nearby devices every Bluetooth call throws: PcScreen asks first, then starts again.
         if (Build.VERSION.SDK_INT >= 31 && app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return
         target = address
+        stale = null
         handler.removeCallbacks(retry)
         if (address != null) handler.postDelayed(retry, Hid.RETRY_MS)
         val h = hid
@@ -105,7 +143,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         }
         if (adapter?.isEnabled != true) { link = PcLink.NoBluetooth; return }
         link = PcLink.Starting
-        if (!safely { adapter.getProfileProxy(app, proxy, BluetoothProfile.HID_DEVICE) }) link = PcLink.NoBluetooth
+        if (!safely { adapter.getProfileProxy(app, proxy, BluetoothProfile.HID_DEVICE) }) link = PcLink.Unsupported
     }
 
     /**
