@@ -211,6 +211,8 @@ interface Strings {
     val pcName: String
     val keyboardLayout: String
     val keyboardLayoutHint: String
+    /** Asked once, right after a PC is added. */
+    val askLayout: String
     val layoutLatAm: String
     val layoutSpain: String
     val layoutUs: String
@@ -411,6 +413,7 @@ object En : Strings {
     override val pcName = "PC name"
     override val keyboardLayout = "Keyboard layout"
     override val keyboardLayoutHint = "Pick the one this PC uses in Windows, so what you type comes out right."
+    override val askLayout = "What keyboard does this PC use?"
     override val layoutLatAm = "Spanish (Latin America)"
     override val layoutSpain = "Spanish (Spain)"
     override val layoutUs = "English (US)"
@@ -611,6 +614,7 @@ object Es : Strings {
     override val pcName = "Nombre del PC"
     override val keyboardLayout = "Distribución del teclado"
     override val keyboardLayoutHint = "Elige la que usa este PC en Windows, para que lo que escribas salga bien."
+    override val askLayout = "¿Qué teclado usa este PC?"
     override val layoutLatAm = "Español (Latinoamérica)"
     override val layoutSpain = "Español (España)"
     override val layoutUs = "Inglés (EE. UU.)"

@@ -95,13 +95,16 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
     layoutOf?.let { pc -> LayoutDialog(pc.layout, { layoutOf = null }) { model.setLayout(pc, it); layoutOf = null } }
 }
 
+/** The layout's name, as the person picks it. */
+fun layoutName(t: Strings, layout: Layout) = when (layout) { Layout.LatAm -> t.layoutLatAm; Layout.Spain -> t.layoutSpain; Layout.US -> t.layoutUs }
+
 /** Which keyboard layout the PC uses: one tap picks it. */
 @Composable
-private fun LayoutDialog(current: Layout, dismiss: () -> Unit, pick: (Layout) -> Unit) {
+fun LayoutDialog(current: Layout, dismiss: () -> Unit, title: String = LocalStrings.current.keyboardLayout, pick: (Layout) -> Unit) {
     val t = LocalStrings.current
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(t.keyboardLayout) },
+        title = { Text(title) },
         text = {
             Column(Modifier.selectableGroup()) {
                 Text(t.keyboardLayoutHint, Modifier.padding(bottom = 8.dp))
@@ -111,7 +114,7 @@ private fun LayoutDialog(current: Layout, dismiss: () -> Unit, pick: (Layout) ->
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(layout == current, null)
-                        Text(when (layout) { Layout.LatAm -> t.layoutLatAm; Layout.Spain -> t.layoutSpain; Layout.US -> t.layoutUs }, Modifier.padding(start = 12.dp))
+                        Text(layoutName(t, layout), Modifier.padding(start = 12.dp))
                     }
                 }
             }

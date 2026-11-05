@@ -116,14 +116,25 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
 
     val hid = model.hid ?: return
     val pc = model.pc
+    var changing by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 ControllerTitle(pc?.name ?: t.addPcTitle, switch)
                 PcStatus(hid.link)
             }
+            // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it.
+            if (pc != null) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp)) {
+                Icon(painterResource(R.drawable.sym_keyboard), null)
+                Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1)
+            }
         }
         if (pc == null) AddPc(model) else Pad(hid)
+    }
+    // Just added: ask once (the guess preselected); later, from the button above.
+    if (pc != null && (model.askLayout || changing)) {
+        val done = { changing = false; model.layoutAsked() }
+        LayoutDialog(pc.layout, done, title = if (model.askLayout) t.askLayout else t.keyboardLayout) { model.setLayout(pc, it); done() }
     }
 }
 

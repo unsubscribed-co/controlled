@@ -92,7 +92,22 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      * The phone as a Bluetooth keyboard and mouse; a computer that connects while adding one is saved as a PC. Null before
      * Android 9, which has no HID device profile: there the app doesn't offer Add a PC.
      */
-    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name -> if (screen == Screen.Pc && pc == null) savePc(PairedPc(address, name ?: "PC", Layout.guess())) } else null
+    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name ->
+        if (screen == Screen.Pc && pc == null) {
+            savePc(PairedPc(address, name ?: "PC", Layout.guess()))
+            askLayout = true
+        }
+    } else null
+    /**
+     * A PC was just added: ask which keyboard it uses. A Bluetooth keyboard can't read the PC's layout, and the guess from
+     * the phone's language is wrong for an English phone and a Latin American PC (":" and "/" came out as "Ñ" and "-").
+     */
+    var askLayout by mutableStateOf(false)
+        private set
+
+    fun layoutAsked() {
+        askLayout = false
+    }
     var link by mutableStateOf(Link.Connecting)
         private set
     var volume by mutableStateOf<Int?>(null)
