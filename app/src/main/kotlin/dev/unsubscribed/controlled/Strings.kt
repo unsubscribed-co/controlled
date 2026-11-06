@@ -151,6 +151,8 @@ interface Strings {
     val leftClick: String
     val rightClick: String
     val typeOnPc: String
+    /** Characters the PC's keyboard layout can't type, so they didn't reach it. */
+    fun notTyped(chars: String): String
     val esc: String
     val tab: String
     val toolsWindows: String
@@ -347,12 +349,13 @@ object En : Strings {
     override val addPcSlow = "Still waiting? Keep this screen open while the PC adds the phone. If the PC already lists this phone, remove it there and add it again."
     override val pcPermission = "Controlled works as a Bluetooth keyboard and mouse for your PC. Android will ask to let it connect to nearby devices."
     override val addPcTitle = "Add a PC"
-    override val addPcSteps = "1. Tap Make this phone visible.\n2. On the PC: Settings > Bluetooth & devices > Add device > Bluetooth, and pick this phone.\n3. Confirm the code on both."
+    override val addPcSteps = "For Windows PCs (its shortcuts are Windows ones).\n1. Tap Make this phone visible.\n2. On the PC: Settings > Bluetooth & devices > Add device > Bluetooth, and pick this phone.\n3. Confirm the code on both."
     override val makeVisible = "Make this phone visible"
     override val trackpadHint = "Drag to move. Tap to click. Two fingers: tap to right-click, drag to scroll. Tap, then touch and drag to select."
     override val leftClick = "Left click"
     override val rightClick = "Right click"
     override val typeOnPc = "Type on the PC"
+    override fun notTyped(chars: String) = "Not typed on the PC: $chars. Its keyboard can't type them."
     override val esc = "Esc"
     override val tab = "Tab"
     override val toolsWindows = "Windows"
@@ -547,12 +550,13 @@ object Es : Strings {
     override val addPcSlow = "¿Sigue esperando? Deja esta pantalla abierta mientras el PC agrega el teléfono. Si el PC ya muestra este teléfono, quítalo ahí y agrégalo otra vez."
     override val pcPermission = "Controlled funciona como teclado y mouse Bluetooth para tu PC. Android te pedirá permiso para conectarse a dispositivos cercanos."
     override val addPcTitle = "Agregar un PC"
-    override val addPcSteps = "1. Toca Hacer visible este teléfono.\n2. En el PC: Configuración > Bluetooth y dispositivos > Agregar dispositivo > Bluetooth, y elige este teléfono.\n3. Confirma el código en ambos."
+    override val addPcSteps = "Para PC con Windows (los atajos son de Windows).\n1. Toca Hacer visible este teléfono.\n2. En el PC: Configuración > Bluetooth y dispositivos > Agregar dispositivo > Bluetooth, y elige este teléfono.\n3. Confirma el código en ambos."
     override val makeVisible = "Hacer visible este teléfono"
     override val trackpadHint = "Arrastra para mover. Toca para hacer clic. Dos dedos: toca para clic derecho, arrastra para desplazarte. Toca, luego toca y arrastra para seleccionar."
     override val leftClick = "Clic izquierdo"
     override val rightClick = "Clic derecho"
     override val typeOnPc = "Escribe en el PC"
+    override fun notTyped(chars: String) = "No se escribieron en el PC: $chars. Su teclado no los tiene."
     override val esc = "Esc"
     override val tab = "Tab"
     override val toolsWindows = "Ventanas"

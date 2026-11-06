@@ -186,11 +186,14 @@ private fun AddPc(model: RemoteModel) {
 private fun TypeField(hid: PcHid) {
     val t = LocalStrings.current
     var text by remember { mutableStateOf("") }
+    // What the PC's layout can't type (emoji, symbols it lacks) never reaches it: say so, and don't Backspace for it.
+    val typable = { c: Char -> Keymap.strokes(c, hid.layout) != null }
+    val missing = text.filterNot(typable).toSet()
     OutlinedTextField(
         text,
         { new ->
             val common = text.commonPrefixWith(new).length
-            repeat(text.length - common) { hid.key(0, Keymap.BACKSPACE) }
+            repeat(text.substring(common).count(typable)) { hid.key(0, Keymap.BACKSPACE) }
             hid.type(new.substring(common))
             text = new
         },
@@ -201,6 +204,7 @@ private fun TypeField(hid: PcHid) {
             true
         },
         label = { Text(t.typeOnPc) }, singleLine = true,
+        isError = missing.isNotEmpty(), supportingText = if (missing.isNotEmpty()) ({ Text(t.notTyped(missing.joinToString(" "))) }) else null,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { hid.key(0, Keymap.ENTER); text = "" }),
     )
