@@ -179,7 +179,8 @@ object Ssdp {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
         for (network in cm.allNetworks) {
             val caps = cm.getNetworkCapabilities(network) ?: continue
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            // A VPN over Wi-Fi (Tailscale) reports the Wi-Fi transport too: its tunnel address would send the search into the tunnel.
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
                 val lp = cm.getLinkProperties(network) ?: continue
                 for (linkAddress in lp.linkAddresses) {
                     val address = linkAddress.address
