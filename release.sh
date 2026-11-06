@@ -18,7 +18,9 @@ bucket=$("${aws[@]}" cloudformation describe-stacks --region us-east-1 --stack-n
   --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
 prefix=${home#https://*/} # "controlled": the page's folder in the dev site bucket
 
-code=$(git rev-list --count HEAD)
+# +100: test builds installed by hand during development reached the 70s while the count was in the 40s, and Android
+# refuses a lower number, so the dev page's updates never reached the phone. Hand builds stay under 100.
+code=$(( $(git rev-list --count HEAD) + 100 ))
 name="dev.$code"
 ./gradlew assembleDevSideload -PversionCodeOverride="$code" -PversionNameOverride="$name" --quiet
 apk=app/build/outputs/apk/dev/sideload/app-dev-sideload.apk
