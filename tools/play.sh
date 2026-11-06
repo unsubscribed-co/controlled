@@ -31,7 +31,7 @@ token=$(curl -sS --fail-with-body https://oauth2.googleapis.com/token \
 call() { curl -sS --fail-with-body -H "Authorization: Bearer $token" "$@"; }
 get() { node -pe "const r = JSON.parse(require('fs').readFileSync(0)); $1"; }
 
-edit=$(call -X POST "$api/edits" | get 'r.id')
+edit=$(call -d "" "$api/edits" | get 'r.id')
 case "${1:-}" in
   check)
     call "$api/edits/$edit/tracks" | get 'r.tracks.map(t => t.track + ": " + (t.releases || []).map(x => (x.name || x.versionCodes) + " " + x.status).join(", ")).join("\n")'
@@ -56,7 +56,7 @@ case "${1:-}" in
       call -X PUT -H "Content-Type: application/json" -d "$body" "$api/edits/$edit/tracks/$track" > /dev/null
       echo "$code ($name) on $track"
     done
-    call -X POST "$api/edits/$edit:commit" > /dev/null
+    call -d "" "$api/edits/$edit:commit" > /dev/null
     echo "Committed: the internal track is live in minutes; a closed track waits for Google's review."
     ;;
   *)
