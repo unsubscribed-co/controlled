@@ -81,8 +81,14 @@ class MainActivity : ComponentActivity() {
             }
             log { "ir power arg=$a emitter=${IrWake.hasEmitter(this)} sent=${code != null && IrWake.powerOn(this, code)}" }
         }
+        // Spike: --es ble_mouse start|draw|stop (BleMouse).
+        if (BuildConfig.LOG) when (intent?.getStringExtra("ble_mouse")) {
+            "start" -> BleMouse.start(this)
+            "draw" -> BleMouse.draw()
+            "stop" -> BleMouse.stop(this)
+        }
         if (intent?.action != Intent.ACTION_SEND) return
-        val t = stringsOf(resources.configuration.locales[0].language)
+        val t =stringsOf(resources.configuration.locales[0].language)
         // A link goes to a TV: from the PC, open the default TV (or the first one).
         if (model.tv == null) (model.controllers.defaultOne() as? PairedTv ?: model.controllers.tvs.firstOrNull())?.let(model::select)
         val ok = model.tv != null && model.share(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
