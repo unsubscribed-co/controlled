@@ -91,7 +91,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Surface
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -168,13 +167,8 @@ private fun AddPc(model: RemoteModel) {
     BackHandler(onBack = model::cancelAdd)
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(painterResource(R.drawable.sym_computer), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-        hid?.stale?.let { pc ->
-            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.errorContainer) {
-                Text(t.pcStale(pc), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
-            }
-        }
         Text(t.addPcSteps, style = MaterialTheme.typography.bodyLarge)
-        if (slow && hid?.stale == null && hid?.link == PcLink.Waiting) Text(t.addPcSlow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (slow && hid?.link == PcLink.Waiting) Text(t.addPcSlow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button({ visible.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)) },
             Modifier.fillMaxWidth().height(56.dp)) { Text(t.makeVisible) }
         TextButton(model::cancelAdd, Modifier.fillMaxWidth()) { Text(t.backToControllers) }
