@@ -24,7 +24,7 @@
 Add this line to `local.properties` (it isn't in git):
 
 ```
-play.serviceAccount=D:/Android/upload/play-publisher.json
+play.serviceAccount=D\:/Android/upload/play-publisher.json
 ```
 
 Back the key up to the prod account's SSM from your own terminal, the same way as the upload key:
