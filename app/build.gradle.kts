@@ -28,8 +28,8 @@ android {
         applicationId = "dev.unsubscribed.controlled"
         minSdk = 26
         targetSdk = 37
-        versionCode = 12
-        versionName = "1.11"
+        versionCode = 13
+        versionName = "1.12"
         // Play wants the privacy policy reachable from inside the app too (docs/play-listing.md).
         buildConfigField("String", "PRIVACY_URL", "\"${config.getValue("privacyUrl")}\"")
         // AGPL: the app links to its own source.
