@@ -200,7 +200,8 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         Link.Connected -> if (sleeping) t.tvOff else model.foregroundName()?.let { t.nowOn(it) }
         Link.Connecting -> if (slow) t.connecting else null
         Link.Waking -> t.turningOn
-        Link.Off -> if (model.vpn) t.vpnNote else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
+        // A Google TV answers even in standby, so not reaching one is almost always the network.
+        Link.Off -> if (model.vpn) t.vpnNote else if (tv.brand == Brand.GoogleTv) t.gtvUnreachable else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
         Link.NoWifi -> t.noWifi
         Link.CertificateChanged -> null
     }
