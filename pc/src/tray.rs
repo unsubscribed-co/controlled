@@ -55,12 +55,14 @@ pub fn run(shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
         .expect("tray icon");
 
     let mut shown: Option<(bool, Option<String>, bool)> = None;
+    // One timer wakes the message loop twice a second to refresh the icon. Created once: without a window, every
+    // SetTimer call makes a new timer, and a call per loop ran out of Windows' handles within hours (measured: crash).
+    unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetTimer(0, 0, 500, None) };
     loop {
-        // Windows' message loop: the tray icon's clicks and menu arrive through it. A timer wakes it twice a second.
+        // Windows' message loop: the tray icon's clicks and menu arrive through it.
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::*;
             let mut msg: MSG = std::mem::zeroed();
-            SetTimer(0, 1, 500, None);
             if GetMessageW(&mut msg, 0, 0, 0) <= 0 {
                 return;
             }
