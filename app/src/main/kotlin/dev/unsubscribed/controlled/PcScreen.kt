@@ -68,6 +68,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -164,7 +165,7 @@ private fun PcStatus(hid: PcHid) {
     val t = LocalStrings.current
     val colors = MaterialTheme.colorScheme
     val link = if (hid.smooth == Smooth.On) PcLink.Connected else hid.link
-    val text = if (hid.smooth == Smooth.On) t.pcSmooth else when (link) {
+    val text = if (hid.smooth == Smooth.On) t.pcConnected else when (link) {
         PcLink.Connected -> t.pcConnected
         PcLink.Waiting -> t.pcWaiting
         PcLink.Starting, PcLink.Off -> t.connecting
@@ -175,6 +176,10 @@ private fun PcStatus(hid: PcHid) {
         val dot = Modifier.size(8.dp).clip(CircleShape)
         Box(if (link == PcLink.Connected) dot.background(colors.primary) else dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
         Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        // Smooth mode in sight: an ember label, not just different words.
+        if (hid.smooth == Smooth.On) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = colors.primaryContainer) {
+            Text(t.pcSmooth, Modifier.padding(horizontal = 10.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = colors.onPrimaryContainer)
+        }
     }
 }
 

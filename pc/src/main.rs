@@ -20,6 +20,11 @@ fn spawn_window() -> Option<Child> {
 }
 
 fn main() {
+    // No console to show a crash: write it to %APPDATA%\Controlled\error.log (inside the package's own folder
+    // when installed from the Store), so a failure can be diagnosed.
+    std::panic::set_hook(Box::new(|info| {
+        let _ = std::fs::write(state::dir().join("error.log"), format!("{info}\n"));
+    }));
     if std::env::args().any(|a| a == "--window") {
         return ui::run();
     }
