@@ -81,6 +81,8 @@ class MainActivity : ComponentActivity() {
             }
             log { "ir power arg=$a emitter=${IrWake.hasEmitter(this)} sent=${code != null && IrWake.powerOn(this, code)}" }
         }
+        // Smooth-mode prototype: --es wifi_mouse <pc ip> (WifiMouse).
+        if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
         // A link goes to a TV: from the PC, open the default TV (or the first one).
@@ -111,7 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = remoteVolumeKey(keyCode) || super.onKeyUp(keyCode, event)
 
     private fun remoteVolumeKey(keyCode: Int) = (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
-        (model.screen == Screen.Remote && model.link == Link.Connected || model.screen == Screen.Pc && model.hid?.link == PcLink.Connected)
+        (model.screen == Screen.Remote && model.link == Link.Connected || model.screen == Screen.Pc && model.hid?.connected == true)
 
     private fun openAppSettings() {
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

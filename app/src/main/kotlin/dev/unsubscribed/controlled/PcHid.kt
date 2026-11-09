@@ -23,6 +23,9 @@ import java.util.concurrent.Executor
 /** The PC link: the phone as a Bluetooth keyboard and mouse. Unsupported: Bluetooth is on, but this phone refuses to be one. */
 enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported }
 
+/** Smooth mode (docs/plans/pc-wifi.md): the same input over Wi-Fi to Controlled for PC, when that PC runs it. */
+enum class Smooth { Off, Pairing, On }
+
 /**
  * The phone as a Bluetooth keyboard + mouse + media keys (Android's HID device profile), so a PC needs nothing installed.
  * Registered only while a PC controller is on screen (plus the remote's grace); one computer at a time.
@@ -37,6 +40,62 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     var link by mutableStateOf(PcLink.Off)
         private set
+
+    var smooth by mutableStateOf(Smooth.Off)
+        private set
+    /** While pairing smooth mode: the code the PC's dialog must show too. */
+    var smoothCode by mutableStateOf<String?>(null)
+        private set
+    private var wifi: SmoothLink? = null
+    /** Bumped on every start and stop, so a search or connection from an earlier screen can't take over. */
+    private var smoothRun = 0
+    /** The PC smooth mode is searching for or connected to, so repeated starts don't stack searches. */
+    private var smoothFor: String? = null
+
+    /** Bluetooth or smooth mode: either way the PC takes input. */
+    val connected get() = link == PcLink.Connected || smooth == Smooth.On
+
+    /** Looks for Controlled for PC on this Wi-Fi under the PC's name; while it answers, input goes that way. */
+    private fun startSmooth(address: String) {
+        if (smoothFor == address) return
+        smoothFor = address
+        val run = ++smoothRun
+        val name = runCatching { adapter?.getRemoteDevice(address)?.name }.getOrNull() ?: return log { "smooth: no name for $address" }.also { smoothFor = null }
+        Thread {
+            val to = findSmoothPc(app, name)
+            log { "smooth: looked for '$name', found $to" }
+            val link = SmoothLink(app)
+            val ok = to != null && run == smoothRun && runCatching {
+                link.connect(to) { code -> handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
+            }.onFailure { log { "smooth: $it" } }.getOrDefault(false)
+            handler.post { smoothCode = null }
+            if (!ok || run != smoothRun) {
+                link.close()
+                handler.post { if (run == smoothRun) { smooth = Smooth.Off; smoothFor = null; handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, Hid.SMOOTH_RETRY_MS) } }
+                return@Thread
+            }
+            handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On } }
+            link.awaitClose()
+            handler.post {
+                if (wifi === link) { wifi = null; smooth = Smooth.Off }
+                link.close()
+                if (run == smoothRun) smoothFor = null
+                if (run == smoothRun && target == address) startSmooth(address)
+            }
+        }.start()
+    }
+
+    private fun stopSmooth() {
+        smoothRun++
+        smoothFor = null
+        wifi?.let { w -> io.post { w.close() } }
+        wifi = null
+        smooth = Smooth.Off
+        smoothCode = null
+    }
+
+    /** The smooth link, while it carries input. */
+    private fun smoothLink() = wifi.takeIf { smooth == Smooth.On }
 
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
@@ -96,6 +155,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         // Without Nearby devices every Bluetooth call throws: PcScreen asks first, then starts again.
         if (Build.VERSION.SDK_INT >= 31 && app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return
         target = address
+        if (address != null) startSmooth(address) else stopSmooth()
         handler.removeCallbacks(retry)
         if (address != null) handler.postDelayed(retry, Hid.RETRY_MS)
         val h = hid
@@ -130,6 +190,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     }
 
     fun stop() {
+        stopSmooth()
         handler.removeCallbacks(retry)
         val h = hid ?: return
         // Never leave Alt held on the PC.
@@ -165,6 +226,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private val drain: Runnable = Runnable { drain() }
 
     private fun send(id: Int, report: ByteArray) {
+        smoothLink()?.let { w -> io.post { runCatching { w.report(id, report) } }; return }
         if (host != null && outbox.add(id, report)) drain()
     }
 
@@ -203,6 +265,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** One report per move, whatever its size (16-bit deltas), so a quick flick never arrives in pieces. */
     fun move(dx: Int, dy: Int) {
+        smoothLink()?.let { w -> io.post { runCatching { w.move(dx, dy) } }; return }
         if (host != null && outbox.move(held, dx, dy)) drain()
     }
 
@@ -229,6 +292,8 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** Types [text] as the PC's [layout] reads keys; characters it can't type are skipped. */
     fun type(text: String) {
+        // Smooth mode types the characters themselves: the PC's layout doesn't matter.
+        smoothLink()?.let { w -> io.post { runCatching { w.text(text) } }; return }
         for (c in text) Keymap.strokes(c, layout)?.forEach { key(it.mods, it.key) }
     }
 
@@ -255,6 +320,15 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
      * Picks Windows' display mode [index] (0 PC screen only, 1 duplicate, 2 extend, 3 second screen only) in its Win+P
      * menu: the menu opens on the current mode, so Home first, then down to the one wanted.
      */
+    /**
+     * Opens Controlled for PC's Microsoft Store page on the PC, typed over this keyboard: Win+R, the store link, Enter.
+     * The person only clicks Install there.
+     */
+    fun openStore() {
+        key(Keymap.GUI, Keymap.letter('r'))
+        handler.postDelayed({ type(Hid.STORE_LINK); key(0, Keymap.ENTER) }, Hid.RUN_OPEN_MS)
+    }
+
     fun project(index: Int) {
         key(Keymap.GUI, Keymap.letter('p'))
         handler.postDelayed({
@@ -334,6 +408,12 @@ object Hid {
     const val PROJECT_OPEN_MS = 500L
     /** How often a lost PC is tried again while its screen is open. */
     const val RETRY_MS = 5_000L
+    /** How often smooth mode looks for the PC program again while the PC's screen is open. */
+    const val SMOOTH_RETRY_MS = 20_000L
+    /** Controlled for PC in the Microsoft Store (Partner Center product 9N08NXM529FH). */
+    const val STORE_LINK = "ms-windows-store://pdp/?ProductId=9N08NXM529FH"
+    /** How long Windows' Run box gets to open before the link is typed. */
+    const val RUN_OPEN_MS = 700L
     /**
      * The gap between reports: just slower than the link's 11.25 ms beat (one report per beat). Faster, reports pile up
      * in Android's stack and the pointer trails the finger (measured 150 to 300 ms behind at 8 ms); slower, the pile

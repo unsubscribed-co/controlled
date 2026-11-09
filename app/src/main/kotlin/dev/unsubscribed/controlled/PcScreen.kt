@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -61,12 +62,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -116,19 +119,42 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     val hid = model.hid ?: return
     val pc = model.pc
     var changing by remember { mutableStateOf(false) }
+    var offering by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                ControllerTitle(pc?.name ?: t.addPcTitle, switch)
-                PcStatus(hid.link)
-            }
-            // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it.
-            if (pc != null) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp)) {
+            Box(Modifier.weight(1f)) { ControllerTitle(pc?.name ?: t.addPcTitle, switch) }
+            // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it. Smooth mode types
+            // the characters themselves, so there it doesn't matter and isn't shown.
+            if (pc != null && hid.smooth != Smooth.On) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp).widthIn(max = 150.dp)) {
                 Icon(painterResource(R.drawable.sym_keyboard), null)
-                Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1)
+                Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        // Status on its own full-width line, so a long PC name or layout never squeezes it.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            PcStatus(hid)
+            // Offered while plain Bluetooth carries the input: a smoother pointer with the PC program.
+            if (pc != null && hid.link == PcLink.Connected && hid.smooth == Smooth.Off) {
+                TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
             }
         }
         if (pc == null) AddPc(model) else Pad(hid)
+    }
+    if (offering) AlertDialog(
+        onDismissRequest = { offering = false },
+        confirmButton = { TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) } },
+        dismissButton = { TextButton({ offering = false }) { Text(t.notNow) } },
+        title = { Text(t.smoothOffer) },
+        text = { Text(t.smoothOfferBody) },
+    )
+    // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
+    hid.smoothCode?.let { code ->
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text(t.smoothPairTitle) },
+            text = { Column { Text(t.smoothPairBody); Text(code, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.displaySmall) } },
+        )
     }
     // Just added: ask once (the guess preselected); later, from the button above.
     if (pc != null && (model.askLayout || changing)) {
@@ -138,10 +164,11 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
 }
 
 @Composable
-private fun PcStatus(link: PcLink) {
+private fun PcStatus(hid: PcHid) {
     val t = LocalStrings.current
     val colors = MaterialTheme.colorScheme
-    val text = when (link) {
+    val link = if (hid.smooth == Smooth.On) PcLink.Connected else hid.link
+    val text = if (hid.smooth == Smooth.On) t.pcConnected else when (link) {
         PcLink.Connected -> t.pcConnected
         PcLink.Waiting -> t.pcWaiting
         PcLink.Starting, PcLink.Off -> t.connecting
@@ -152,6 +179,10 @@ private fun PcStatus(link: PcLink) {
         val dot = Modifier.size(8.dp).clip(CircleShape)
         Box(if (link == PcLink.Connected) dot.background(colors.primary) else dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
         Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        // Smooth mode in sight: an ember label, not just different words.
+        if (hid.smooth == Smooth.On) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = colors.primaryContainer) {
+            Text(t.pcSmooth, Modifier.padding(horizontal = 10.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = colors.onPrimaryContainer)
+        }
     }
 }
 
@@ -181,7 +212,7 @@ private fun TypeField(hid: PcHid) {
     val t = LocalStrings.current
     var text by remember { mutableStateOf("") }
     // What the PC's layout can't type (emoji, symbols it lacks) never reaches it: say so, and don't Backspace for it.
-    val typable = { c: Char -> Keymap.strokes(c, hid.layout) != null }
+    val typable = { c: Char -> hid.smooth == Smooth.On || Keymap.strokes(c, hid.layout) != null }
     val missing = text.filterNot(typable).toSet()
     OutlinedTextField(
         text,
