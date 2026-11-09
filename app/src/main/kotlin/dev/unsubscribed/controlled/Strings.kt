@@ -54,6 +54,10 @@ interface Strings {
     /** A VPN carries this app's traffic and may be hiding the home network. */
     val vpnNote: String
     val pcSmooth: String
+    val smoothOffer: String
+    val smoothOfferBody: String
+    val openOnPc: String
+    val notNow: String
     val smoothPairTitle: String
     val smoothPairBody: String
     val forgetTv: String
@@ -265,6 +269,10 @@ object En : Strings {
     override val tvForgot = "This TV no longer knows this phone: it was reset, or its remotes were removed. Pair it again."
     override val pairAgain = "Pair again"
     override val pcSmooth = "Connected, smooth mode (Wi-Fi)"
+    override val smoothOffer = "Smooth mode"
+    override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: just click Install."
+    override val openOnPc = "Open on the PC"
+    override val notNow = "Not now"
     override val smoothPairTitle = "Allow this phone on the PC"
     override val smoothPairBody = "The PC is asking to allow this phone. Click Yes there if it shows this same code:"
     override val vpnNote = "Can't reach the TV. A VPN is on in this phone: if it covers your home network, exclude Controlled in the VPN app."
@@ -469,6 +477,10 @@ object Es : Strings {
     override val tvForgot = "Este televisor ya no reconoce este celular: lo restablecieron o le quitaron los controles. Vincúlalo de nuevo."
     override val pairAgain = "Vincular de nuevo"
     override val pcSmooth = "Conectado, modo fluido (Wi-Fi)"
+    override val smoothOffer = "Modo fluido"
+    override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: solo haz clic en Instalar."
+    override val openOnPc = "Abrir en el PC"
+    override val notNow = "Ahora no"
     override val smoothPairTitle = "Permite este celular en el PC"
     override val smoothPairBody = "El PC pide permitir este celular. Haz clic en Sí allá si muestra este mismo código:"
     override val vpnNote = "No llegamos al televisor. Este celular tiene una VPN activa: si cubre la red de tu casa, excluye Controlled en la app de la VPN."

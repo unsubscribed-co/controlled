@@ -319,6 +319,15 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
      * Picks Windows' display mode [index] (0 PC screen only, 1 duplicate, 2 extend, 3 second screen only) in its Win+P
      * menu: the menu opens on the current mode, so Home first, then down to the one wanted.
      */
+    /**
+     * Opens Controlled for PC's Microsoft Store page on the PC, typed over this keyboard: Win+R, the store link, Enter.
+     * The person only clicks Install there.
+     */
+    fun openStore() {
+        key(Keymap.GUI, Keymap.letter('r'))
+        handler.postDelayed({ type(Hid.STORE_LINK); key(0, Keymap.ENTER) }, Hid.RUN_OPEN_MS)
+    }
+
     fun project(index: Int) {
         key(Keymap.GUI, Keymap.letter('p'))
         handler.postDelayed({
@@ -400,6 +409,10 @@ object Hid {
     const val RETRY_MS = 5_000L
     /** How often smooth mode looks for the PC program again while the PC's screen is open. */
     const val SMOOTH_RETRY_MS = 20_000L
+    /** Controlled for PC in the Microsoft Store (Partner Center product 9N08NXM529FH). */
+    const val STORE_LINK = "ms-windows-store://pdp/?ProductId=9N08NXM529FH"
+    /** How long Windows' Run box gets to open before the link is typed. */
+    const val RUN_OPEN_MS = 700L
     /**
      * The gap between reports: just slower than the link's 11.25 ms beat (one report per beat). Faster, reports pile up
      * in Android's stack and the pointer trails the finger (measured 150 to 300 ms behind at 8 ms); slower, the pile

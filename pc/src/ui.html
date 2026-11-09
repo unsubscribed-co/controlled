@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<style>
+/* Windows 11 look (Fluent): Segoe UI Variable, layered neutral surfaces, 4px/8px radii, one accent: Controlled's ember.
+   Ember is darkened in light mode to keep 4.5:1 on white. Every text color here passes 4.5:1 on its surface. */
+:root {
+  --bg: #f3f3f3; --card: #ffffff; --card-2: #f9f9f9; --stroke: #e5e5e5; --text: #1b1b1b; --text-2: #5c5c5c;
+  --accent: #b5401b; --accent-text: #ffffff; --accent-soft: #fbe9e3; --ok: #0f7b0f; --warn: #8a5300; --warn-soft: #fff4ce;
+  --danger: #c42b1c; --focus: #1b1b1b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020; --card: #2b2b2b; --card-2: #323232; --stroke: #3a3a3a; --text: #ffffff; --text-2: #c5c5c5;
+    --accent: #ff6a3d; --accent-text: #1a0a04; --accent-soft: #3a1b10; --ok: #6ccb5f; --warn: #fce100; --warn-soft: #433519;
+    --danger: #ff99a4; --focus: #ffffff;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 14px/20px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; padding: 20px; user-select: none; }
+h1 { font: 600 20px/28px "Segoe UI Variable Display", "Segoe UI", sans-serif; margin: 0; }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.brand img { border-radius: 10px; flex: none; }
+h2 { font-weight: 600; font-size: 14px; margin: 24px 0 8px; }
+p { margin: 0; }
+.muted { color: var(--text-2); }
+.small { font-size: 12px; line-height: 16px; }
+.card { background: var(--card); border: 1px solid var(--stroke); border-radius: 8px; padding: 16px; }
+.status { display: flex; gap: 14px; align-items: center; }
+.dot { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--card-2); border: 1px solid var(--stroke); }
+.dot svg { width: 20px; height: 20px; }
+.status.on .dot { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.status.paused .dot { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.status .title { font-weight: 600; font-size: 16px; line-height: 22px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.divider { height: 1px; background: var(--stroke); margin: 14px -16px; }
+/* Toggle switch, as Windows draws it. */
+.switch { position: relative; width: 40px; height: 20px; flex: none; }
+.switch input { appearance: none; margin: 0; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--text-2); background: transparent; cursor: pointer; transition: background .15s, border-color .15s; }
+.switch input:checked { background: var(--accent); border-color: var(--accent); }
+.switch span { position: absolute; top: 5px; left: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--text-2); pointer-events: none; transition: transform .15s, background .15s; }
+.switch input:checked + span { transform: translateX(20px); background: var(--accent-text); }
+button { font: inherit; min-height: 32px; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--stroke); background: var(--card-2); color: var(--text); cursor: pointer; }
+button:hover { filter: brightness(0.96); }
+button:active { filter: brightness(0.9); }
+.switch input:active + span { width: 12px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.link { background: none; border: none; padding: 0 4px; color: var(--accent); min-height: 24px; }
+button.link:hover { text-decoration: underline; filter: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ask { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 16px; margin-top: 16px; }
+.code { font: 600 34px/44px "Cascadia Mono", Consolas, monospace; letter-spacing: 4px; margin: 10px 0 14px; color: var(--text); }
+.actions { display: flex; gap: 8px; }
+.list { background: var(--card); border: 1px solid var(--stroke); border-radius: 8px; }
+.item { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; min-height: 56px; }
+.item svg { width: 20px; height: 20px; flex: none; color: var(--text-2); }
+.item .live { color: var(--accent); }
+.item + .item { border-top: 1px solid var(--stroke); }
+.item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { font-size: 12px; line-height: 16px; padding: 2px 8px; border-radius: 10px; color: var(--ok); border: 1px solid currentColor; }
+.empty { padding: 14px 16px; }
+footer { margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+footer .spacer { flex: 1; }
+.down { padding: 32px 0; text-align: center; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="brand"><img src="data:image/png;base64,{{LOGO}}" alt="" width="40" height="40"><div><h1 id="title"></h1><p class="muted small">Unsubscribed!</p></div></header>
+<main id="app" aria-live="polite"></main>
+<script>
+const T = {
+  en: {
+    title: "Controlled for PC",
+    on: "Connected to {name}", onNote: "This phone is controlling the mouse and keyboard.",
+    ready: "Ready", readyNote: "Waiting for an allowed phone on this Wi-Fi.",
+    paused: "Paused", pausedNote: "No phone can use smooth mode until you turn it back on.",
+    smooth: "Smooth mode", smoothNote: "Lets allowed phones control this PC over Wi-Fi. Turning it off doesn't affect a phone paired over Bluetooth: Windows handles that one.",
+    ask: "{name} wants to control this PC", askNote: "Allow it only if your phone shows this same code.",
+    allow: "Allow", deny: "Deny",
+    phones: "Your phones", none: "No phones yet. Open Controlled on your phone, in this PC's controller: the first time, this window asks you to allow it.",
+    now: "Connected now", remove: "Remove", removeConfirm: "Remove?", unnamed: "Phone without a name",
+    startup: "Starts with Windows", startupLink: "Change", help: "Help", privacy: "Privacy",
+    down: "Controlled for PC isn't running. Open it from the Start menu.",
+  },
+  es: {
+    title: "Controlled for PC",
+    on: "Conectado a {name}", onNote: "Este celular está controlando el mouse y el teclado.",
+    ready: "Listo", readyNote: "Esperando un celular permitido en este Wi-Fi.",
+    paused: "En pausa", pausedNote: "Ningún celular puede usar el modo fluido hasta que lo vuelvas a activar.",
+    smooth: "Modo fluido", smoothNote: "Permite que los celulares autorizados controlen este PC por Wi-Fi. Desactivarlo no afecta a un celular emparejado por Bluetooth: ese lo maneja Windows.",
+    ask: "{name} quiere controlar este PC", askNote: "Permítelo solo si tu celular muestra este mismo código.",
+    allow: "Permitir", deny: "Rechazar",
+    phones: "Tus celulares", none: "Aún no hay celulares. Abre Controlled en tu celular, en el control de este PC: la primera vez, esta ventana te pide permitirlo.",
+    now: "Conectado ahora", remove: "Quitar", removeConfirm: "¿Quitar?", unnamed: "Celular sin nombre",
+    startup: "Se inicia con Windows", startupLink: "Cambiar", help: "Ayuda", privacy: "Privacidad",
+    down: "Controlled for PC no se está ejecutando. Ábrelo desde el menú Inicio.",
+  },
+};
+const t = T[(navigator.language || "en").slice(0, 2)] || T.en;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (s, name) => s.replace("{name}", esc(name));
+const send = cmd => window.ipc.postMessage(cmd);
+const ICON = {
+  on: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="2.5" width="8" height="15" rx="2"/><path d="M14 7a4.5 4.5 0 0 1 0 6M16.5 5a8 8 0 0 1 0 10"/></svg>',
+  ready: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="2.5" width="8" height="15" rx="2"/><path d="M6 14.5h2"/></svg>',
+  phone: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 14.5h2"/></svg>',
+  paused: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="3.5" height="12" rx="1"/><rect x="11.5" y="4" width="3.5" height="12" rx="1"/></svg>',
+};
+let confirming = null, last = "";
+document.getElementById("title").textContent = t.title;
+document.title = t.title;
+
+function render(s) {
+  const key = JSON.stringify(s) + confirming;
+  if (key === last) return;
+  last = key;
+  const app = document.getElementById("app");
+  if (!s) { app.innerHTML = `<p class="down muted">${t.down}</p>`; return; }
+  const state = s.paused ? "paused" : s.connected ? "on" : "ready";
+  const title = state === "on" ? fmt(t.on, s.connected) : t[state];
+  const note = state === "on" ? t.onNote : t[state + "Note"];
+  let html = `
+  <section class="card">
+    <div class="status ${state}"><div class="dot">${ICON[state]}</div>
+      <div><p class="title">${title}</p><p class="muted small">${note}</p></div></div>
+    <div class="divider"></div>
+    <div class="row"><label for="smooth"><p>${t.smooth}</p><p class="muted small">${t.smoothNote}</p></label>
+      <div class="switch"><input id="smooth" type="checkbox" role="switch" ${s.paused ? "" : "checked"}><span></span></div></div>
+  </section>`;
+  if (s.ask) {
+    const [code, name] = s.ask;
+    html += `
+  <section class="ask" role="alertdialog" aria-labelledby="askTitle">
+    <p id="askTitle" class="title"><strong>${fmt(t.ask, name)}</strong></p>
+    <p class="muted small">${t.askNote}</p>
+    <p class="code" aria-label="${code.split("").join(" ")}">${esc(code.slice(0, 3))} ${esc(code.slice(3))}</p>
+    <div class="actions"><button class="primary" id="allow">${t.allow}</button><button id="deny">${t.deny}</button></div>
+  </section>`;
+  }
+  html += `<h2>${t.phones}</h2><div class="list">`;
+  if (!s.phones.length) html += `<p class="empty muted small">${t.none}</p>`;
+  for (const [k, name] of s.phones) {
+    const live = s.connected && name === s.connected;
+    html += `<div class="item">${ICON.phone.replace('<svg', live ? '<svg class="live"' : '<svg')}<span class="name">${esc(name || t.unnamed)}</span>${live ? `<span class="badge">${t.now}</span>` : ""}
+      <button data-remove="${esc(k)}">${confirming === k ? t.removeConfirm : t.remove}</button></div>`;
+  }
+  html += `</div>
+  <footer><span class="muted small">${t.startup}</span><button class="link" id="startup">${t.startupLink}</button>
+    <span class="spacer"></span><button class="link" id="help">${t.help}</button><button class="link" id="privacy">${t.privacy}</button>
+    <span class="muted small">v${esc(s.version)}</span></footer>`;
+  const focused = document.activeElement && document.activeElement.id;
+  app.innerHTML = html;
+  if (focused && document.getElementById(focused)) document.getElementById(focused).focus();
+  document.getElementById("smooth").onchange = e => send(`pause ${e.target.checked ? 0 : 1}`);
+  if (s.ask) {
+    document.getElementById("allow").onclick = () => send("answer 1");
+    document.getElementById("deny").onclick = () => send("answer 0");
+  }
+  for (const b of app.querySelectorAll("[data-remove]")) b.onclick = () => {
+    const k = b.dataset.remove;
+    if (confirming === k) { confirming = null; send(`remove ${k}`); } else { confirming = k; last = ""; send("status"); }
+  };
+  document.getElementById("startup").onclick = () => send("open ms-settings:startupapps");
+  document.getElementById("help").onclick = () => send("open https://unsubscribed.dev/controlled/");
+  document.getElementById("privacy").onclick = () => send("open https://unsubscribed.dev/controlled/privacy/");
+}
+send("status");
+setInterval(() => send("status"), 500);
+</script>
+</body>
+</html>

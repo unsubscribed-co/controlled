@@ -117,11 +117,16 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     val hid = model.hid ?: return
     val pc = model.pc
     var changing by remember { mutableStateOf(false) }
+    var offering by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 ControllerTitle(pc?.name ?: t.addPcTitle, switch)
                 PcStatus(hid)
+                // Offered while plain Bluetooth carries the input: a smoother pointer with the PC program.
+                if (pc != null && hid.link == PcLink.Connected && hid.smooth == Smooth.Off) {
+                    TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
+                }
             }
             // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it.
             if (pc != null) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp)) {
@@ -131,6 +136,13 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         }
         if (pc == null) AddPc(model) else Pad(hid)
     }
+    if (offering) AlertDialog(
+        onDismissRequest = { offering = false },
+        confirmButton = { TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) } },
+        dismissButton = { TextButton({ offering = false }) { Text(t.notNow) } },
+        title = { Text(t.smoothOffer) },
+        text = { Text(t.smoothOfferBody) },
+    )
     // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
     hid.smoothCode?.let { code ->
         AlertDialog(
