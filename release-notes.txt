@@ -1,16 +1,6 @@
 <en-US>
-- New: Google TV and Android TV, paired with the code on the TV.
-- Type: paste from the phone.
-- PC: asks which keyboard the PC uses, and says what it can't type.
-- Clearer help when a PC, a VPN or a TV that forgot the phone gets in the way.
-- Turn on: tap again if the IR shot misses.
-- Finding LG TVs works with a VPN like Tailscale.
+- PC: adding a PC no longer gets stuck on "Waiting for the PC…". The pairing used to fail when the phone had been paired with that PC before.
 </en-US>
 <es-419>
-- Nuevo: Google TV y Android TV, vinculados con el código del TV.
-- Escribir: pega desde el celular.
-- PC: pregunta qué teclado usa y avisa lo que no puede escribir.
-- Ayuda más clara con problemas de PC, VPN o un TV que olvidó el celular.
-- Encender: toca otra vez si falla el IR.
-- Buscar TV LG funciona con una VPN como Tailscale.
+- PC: agregar un PC ya no se queda en "Esperando el PC…". El emparejamiento fallaba si el celular ya había estado emparejado con ese PC.
 </es-419>
