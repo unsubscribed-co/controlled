@@ -84,9 +84,12 @@ class MainActivity : ComponentActivity() {
         // Spike: --es ble_mouse start|draw|stop (BleMouse).
         if (BuildConfig.LOG) when (intent?.getStringExtra("ble_mouse")) {
             "start" -> BleMouse.start(this)
+            "start_public" -> { BleMouse.publicAddress = true; BleMouse.start(this) }
             "draw" -> BleMouse.draw()
             "stop" -> BleMouse.stop(this)
+            "bye" -> BleMouse.bye(this)
         }
+        if (BuildConfig.LOG) intent?.getStringExtra("ble_connect")?.let { BleMouse.connect(this, it) }
         if (intent?.action != Intent.ACTION_SEND) return
         val t =stringsOf(resources.configuration.locales[0].language)
         // A link goes to a TV: from the PC, open the default TV (or the first one).

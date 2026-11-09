@@ -69,15 +69,18 @@ object BleMouse {
 
         override fun onCharacteristicReadRequest(device: BluetoothDevice, id: Int, offset: Int, c: BluetoothGattCharacteristic) {
             val v = values[c.uuid] ?: ByteArray(0)
+            log { "ble mouse read ${c.uuid.toString().substring(4, 8)} offset=$offset" }
             server?.sendResponse(device, id, BluetoothGatt.GATT_SUCCESS, offset, v.copyOfRange(minOf(offset, v.size), v.size))
         }
 
         override fun onDescriptorReadRequest(device: BluetoothDevice, id: Int, offset: Int, d: BluetoothGattDescriptor) {
             val v = if (d.uuid == REPORT_REF) bytes(0x01, 0x01) else bytes(0x00, 0x00)
+            log { "ble mouse read descriptor ${d.uuid.toString().substring(4, 8)} of ${d.characteristic.uuid.toString().substring(4, 8)}" }
             server?.sendResponse(device, id, BluetoothGatt.GATT_SUCCESS, offset, v)
         }
 
         override fun onCharacteristicWriteRequest(device: BluetoothDevice, id: Int, c: BluetoothGattCharacteristic, prepared: Boolean, needsResponse: Boolean, offset: Int, value: ByteArray?) {
+            log { "ble mouse write ${c.uuid.toString().substring(4, 8)} ${value?.joinToString { "%02x".format(it) }}" }
             if (needsResponse) server?.sendResponse(device, id, BluetoothGatt.GATT_SUCCESS, offset, value)
         }
 
@@ -98,6 +101,8 @@ object BleMouse {
         BluetoothGattCharacteristic(u(uuid), props, perms).also { values[it.uuid] = value }
 
     private fun cccd() = BluetoothGattDescriptor(CCCD, PERMISSION_READ_ENCRYPTED or PERMISSION_WRITE_ENCRYPTED)
+
+    var publicAddress = false
 
     fun start(context: Context) {
         val manager = context.getSystemService(BluetoothManager::class.java)
@@ -124,6 +129,23 @@ object BleMouse {
         pending += listOf(battery, hid)
         s.addService(info)
 
+        // Experiment: advertise from the phone's fixed (public) address, so a PC that bonded can always recognise it.
+        if (publicAddress) {
+            val params = android.bluetooth.le.AdvertisingSetParameters.Builder().setLegacyMode(true).setConnectable(true).setScannable(true)
+                .setInterval(android.bluetooth.le.AdvertisingSetParameters.INTERVAL_LOW)
+                .setTxPowerLevel(android.bluetooth.le.AdvertisingSetParameters.TX_POWER_HIGH)
+                .also { b -> runCatching { b.javaClass.getMethod("setOwnAddressType", Int::class.javaPrimitiveType).invoke(b, 0) }
+                    .onFailure { log { "ble mouse setOwnAddressType: $it" } } }.build()
+            log { "ble mouse params ${params}" }
+            val d = AdvertiseData.Builder().setIncludeDeviceName(true).addServiceUuid(ParcelUuid(u(0x1812))).build()
+            runCatching {
+                manager.adapter.bluetoothLeAdvertiser?.startAdvertisingSet(params, d, null, null, null, object : android.bluetooth.le.AdvertisingSetCallback() {
+                    override fun onAdvertisingSetStarted(set: android.bluetooth.le.AdvertisingSet?, txPower: Int, status: Int) =
+                        log { "ble mouse public advertising status=$status" }
+                })
+            }.onFailure { log { "ble mouse public advertising threw $it" } }
+            return
+        }
         val settings = AdvertiseSettings.Builder().setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setConnectable(true).setTimeout(0).setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH).build()
         val data = AdvertiseData.Builder().setIncludeDeviceName(true).addServiceUuid(ParcelUuid(u(0x1812))).build()
@@ -158,6 +180,23 @@ object BleMouse {
         busy = true
         val r = server?.notifyCharacteristicChanged(d, report, false, bytes(0, x and 0xFF, x shr 8, 0, 0))
         if (r == BluetoothGatt.GATT_SUCCESS) sent++ else { busy = false; owedX += x; log { "ble mouse notify r=$r" } }
+    }
+
+    /** Experiment: the phone opens the LE link to the PC itself, so Windows reads the services again. */
+    fun connect(context: Context, address: String) {
+        val d = context.getSystemService(BluetoothManager::class.java).adapter.getRemoteDevice(address)
+        val g = d.connectGatt(context, false, object : android.bluetooth.BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) =
+                log { "ble mouse client ${gatt.device.address} state=$newState status=$status" }
+        }, BluetoothDevice.TRANSPORT_LE)
+        log { "ble mouse client connect $address started=${g != null}" }
+    }
+
+    /** Experiment: stop being visible and drop the PC first, so it can't see the services go when the app dies. */
+    fun bye(context: Context) {
+        context.getSystemService(BluetoothManager::class.java).adapter.bluetoothLeAdvertiser?.stopAdvertising(object : AdvertiseCallback() {})
+        host?.let { server?.cancelConnection(it) }
+        log { "ble mouse bye host=${host?.address}" }
     }
 
     fun stop(context: Context) {
