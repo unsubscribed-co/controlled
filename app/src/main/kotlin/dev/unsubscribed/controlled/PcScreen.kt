@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -121,18 +122,20 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     var offering by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                ControllerTitle(pc?.name ?: t.addPcTitle, switch)
-                PcStatus(hid)
-                // Offered while plain Bluetooth carries the input: a smoother pointer with the PC program.
-                if (pc != null && hid.link == PcLink.Connected && hid.smooth == Smooth.Off) {
-                    TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
-                }
-            }
-            // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it.
-            if (pc != null) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp)) {
+            Box(Modifier.weight(1f)) { ControllerTitle(pc?.name ?: t.addPcTitle, switch) }
+            // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it. Smooth mode types
+            // the characters themselves, so there it doesn't matter and isn't shown.
+            if (pc != null && hid.smooth != Smooth.On) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp).widthIn(max = 150.dp)) {
                 Icon(painterResource(R.drawable.sym_keyboard), null)
-                Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1)
+                Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        // Status on its own full-width line, so a long PC name or layout never squeezes it.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            PcStatus(hid)
+            // Offered while plain Bluetooth carries the input: a smoother pointer with the PC program.
+            if (pc != null && hid.link == PcLink.Connected && hid.smooth == Smooth.Off) {
+                TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
             }
         }
         if (pc == null) AddPc(model) else Pad(hid)

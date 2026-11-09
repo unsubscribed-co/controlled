@@ -60,9 +60,10 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         if (smoothFor == address) return
         smoothFor = address
         val run = ++smoothRun
-        val name = runCatching { adapter?.getRemoteDevice(address)?.name }.getOrNull() ?: return
+        val name = runCatching { adapter?.getRemoteDevice(address)?.name }.getOrNull() ?: return log { "smooth: no name for $address" }.also { smoothFor = null }
         Thread {
             val to = findSmoothPc(app, name)
+            log { "smooth: looked for '$name', found $to" }
             val link = SmoothLink(app)
             val ok = to != null && run == smoothRun && runCatching {
                 link.connect(to) { code -> handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }

@@ -18,6 +18,14 @@
     --danger: #ff99a4; --focus: #ffffff;
   }
 }
+/* Forced dark (CONTROLLED_THEME=dark), to check the dark look without changing Windows' setting. */
+:root.dark {
+    --bg: #202020; --card: #2b2b2b; --card-2: #323232; --stroke: #3a3a3a; --text: #ffffff; --text-2: #c5c5c5;
+    --accent: #ff6a3d; --accent-text: #1a0a04; --accent-soft: #3a1b10; --ok: #6ccb5f; --warn: #fce100; --warn-soft: #433519;
+    --danger: #ff99a4; --focus: #ffffff;
+  }
+
+
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 body { font: 14px/20px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; padding: 20px; user-select: none; }
@@ -100,6 +108,7 @@ const T = {
     down: "Controlled for PC no se está ejecutando. Ábrelo desde el menú Inicio.",
   },
 };
+if ("{{THEME}}" === "dark") document.documentElement.classList.add("dark");
 const t = T["{{LANG}}"] || T[(navigator.language || "en").slice(0, 2)] || T.en;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (s, name) => s.replace("{name}", esc(name));
