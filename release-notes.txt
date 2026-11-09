@@ -1,6 +1,8 @@
 <en-US>
-- PC: adding a PC no longer gets stuck on "Waiting for the PC…". The pairing used to fail when the phone had been paired with that PC before.
+- New: smooth mode for your PC. Install the free Controlled for PC app (Microsoft Store) and the trackpad goes over Wi-Fi: no stutter, and any character types whatever the PC's keyboard. Bluetooth stays as the backup.
+- Google TV: a clearer message when the TV can't be reached on your Wi-Fi.
 </en-US>
 <es-419>
-- PC: agregar un PC ya no se queda en "Esperando el PC…". El emparejamiento fallaba si el celular ya había estado emparejado con ese PC.
+- Nuevo: modo fluido para tu PC. Instala la app gratuita Controlled for PC (Microsoft Store) y el trackpad va por Wi-Fi: sin saltos, y escribe cualquier carácter sin importar el teclado del PC. El Bluetooth queda de respaldo.
+- Google TV: un mensaje más claro cuando no llegamos al TV en tu Wi-Fi.
 </es-419>
