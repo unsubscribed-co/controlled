@@ -61,6 +61,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -120,7 +121,7 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 ControllerTitle(pc?.name ?: t.addPcTitle, switch)
-                PcStatus(hid.link)
+                PcStatus(hid)
             }
             // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it.
             if (pc != null) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp)) {
@@ -130,6 +131,15 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         }
         if (pc == null) AddPc(model) else Pad(hid)
     }
+    // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
+    hid.smoothCode?.let { code ->
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text(t.smoothPairTitle) },
+            text = { Column { Text(t.smoothPairBody); Text(code, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.displaySmall) } },
+        )
+    }
     // Just added: ask once (the guess preselected); later, from the button above.
     if (pc != null && (model.askLayout || changing)) {
         val done = { changing = false; model.layoutAsked() }
@@ -138,10 +148,11 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
 }
 
 @Composable
-private fun PcStatus(link: PcLink) {
+private fun PcStatus(hid: PcHid) {
     val t = LocalStrings.current
     val colors = MaterialTheme.colorScheme
-    val text = when (link) {
+    val link = if (hid.smooth == Smooth.On) PcLink.Connected else hid.link
+    val text = if (hid.smooth == Smooth.On) t.pcSmooth else when (link) {
         PcLink.Connected -> t.pcConnected
         PcLink.Waiting -> t.pcWaiting
         PcLink.Starting, PcLink.Off -> t.connecting
@@ -181,7 +192,7 @@ private fun TypeField(hid: PcHid) {
     val t = LocalStrings.current
     var text by remember { mutableStateOf("") }
     // What the PC's layout can't type (emoji, symbols it lacks) never reaches it: say so, and don't Backspace for it.
-    val typable = { c: Char -> Keymap.strokes(c, hid.layout) != null }
+    val typable = { c: Char -> hid.smooth == Smooth.On || Keymap.strokes(c, hid.layout) != null }
     val missing = text.filterNot(typable).toSet()
     OutlinedTextField(
         text,

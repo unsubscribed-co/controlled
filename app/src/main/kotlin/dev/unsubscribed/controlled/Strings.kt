@@ -42,6 +42,7 @@ interface Strings {
     val turningOn: String
     val tvOff: String
     val tvOffNoPower: String
+    val gtvUnreachable: String
     val noWifi: String
     /** Turn on timed out: where LG keeps the setting that lets the TV wake from the phone. */
     val wakeHint: String
@@ -52,6 +53,9 @@ interface Strings {
     val pairAgain: String
     /** A VPN carries this app's traffic and may be hiding the home network. */
     val vpnNote: String
+    val pcSmooth: String
+    val smoothPairTitle: String
+    val smoothPairBody: String
     val forgetTv: String
     val privacy: String
     val sourceCode: String
@@ -253,12 +257,16 @@ object En : Strings {
     override val turningOn = "Turning on…"
     override val tvOff = "TV is off. Tap to turn on"
     override val tvOffNoPower = "TV is off or out of reach. Tap to retry"
+    override val gtvUnreachable = "Can't reach the TV. Check it's on this phone's Wi-Fi; if it is, on the TV forget the Wi-Fi network and join it again. Tap to retry"
     override val noWifi = "No Wi-Fi. Connect to your home Wi-Fi"
     override val wakeHint = "The TV didn't wake. On the TV, turn on Settings > General > Devices > Mobile TV On > Turn on via Wi-Fi"
     override fun nowOn(name: String) = "On now: $name"
     override val certificateChanged = "This TV's security certificate changed. If you replaced or reset the TV, forget it and pair again."
     override val tvForgot = "This TV no longer knows this phone: it was reset, or its remotes were removed. Pair it again."
     override val pairAgain = "Pair again"
+    override val pcSmooth = "Connected, smooth mode (Wi-Fi)"
+    override val smoothPairTitle = "Allow this phone on the PC"
+    override val smoothPairBody = "The PC is asking to allow this phone. Click Yes there if it shows this same code:"
     override val vpnNote = "Can't reach the TV. A VPN is on in this phone: if it covers your home network, exclude Controlled in the VPN app."
     override val forgetTv = "Forget this TV"
     override val privacy = "Privacy policy"
@@ -453,12 +461,16 @@ object Es : Strings {
     override val turningOn = "Encendiendo…"
     override val tvOff = "El TV está apagado. Toca para encender"
     override val tvOffNoPower = "El TV está apagado o fuera de alcance. Toca para reintentar"
+    override val gtvUnreachable = "No llegamos al TV. Revisa que esté en el mismo Wi-Fi que este celular; si lo está, en el TV olvida la red Wi-Fi y vuelve a unirte. Toca para reintentar"
     override val noWifi = "Sin Wi-Fi. Conéctate al Wi-Fi de tu casa"
     override val wakeHint = "El TV no encendió. En el TV, activa Configuración > General > Dispositivos > Encender TV con móvil > Encender por Wi-Fi"
     override fun nowOn(name: String) = "Ahora: $name"
     override val certificateChanged = "El certificado de seguridad de este televisor cambió. Si reemplazaste o restableciste el TV, olvídalo y vincúlalo de nuevo."
     override val tvForgot = "Este televisor ya no reconoce este celular: lo restablecieron o le quitaron los controles. Vincúlalo de nuevo."
     override val pairAgain = "Vincular de nuevo"
+    override val pcSmooth = "Conectado, modo fluido (Wi-Fi)"
+    override val smoothPairTitle = "Permite este celular en el PC"
+    override val smoothPairBody = "El PC pide permitir este celular. Haz clic en Sí allá si muestra este mismo código:"
     override val vpnNote = "No llegamos al televisor. Este celular tiene una VPN activa: si cubre la red de tu casa, excluye Controlled en la app de la VPN."
     override val forgetTv = "Olvidar este TV"
     override val privacy = "Política de privacidad"
