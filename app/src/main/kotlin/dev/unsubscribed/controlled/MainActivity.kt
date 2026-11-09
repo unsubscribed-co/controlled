@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
             log { "ir power arg=$a emitter=${IrWake.hasEmitter(this)} sent=${code != null && IrWake.powerOn(this, code)}" }
         }
         // Smooth-mode prototype: --es wifi_mouse <pc ip> (WifiMouse).
-        if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(it) }
+        if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
         // A link goes to a TV: from the PC, open the default TV (or the first one).

@@ -1,6 +1,9 @@
 # Plan: smooth PC control over Wi-Fi ("Controlled for PC")
 
-Status: waiting for Juan's OK, 2026-11-09.
+Status: approved 2026-11-09.
+- Step 1 measured: 2500/2500 moves arrived at 8 ms over Wi-Fi.
+- Step 2 (pairing and security) works end to end on Juan's desktop.
+- Bluetooth stays the default everywhere. Smooth mode is an optional add-on, Windows first, Mac/Linux later.
 
 ## Why
 - **Classic Bluetooth stutters.** Measured on Juan's desktop: the phone sends a move every 12 ms, but the PC receives them in clumps, with gaps of 60 to 160 ms about 2.6 times a second. On the Legion it's worse. The app can't fix this.
@@ -22,25 +25,21 @@ Status: waiting for Juan's OK, 2026-11-09.
 - **A PC that's off or asleep:** the program isn't running.
 
 ## How it's built
-- **PC program:** a small C#/.NET tray app with no window, except the pairing code and a tray icon to quit.
+- **PC program:** a small Rust program (`pc/`, one binary per OS, no runtime), a tray app with no window, except the pairing code and a tray icon to quit.
   - It starts with Windows (MSIX startup task).
   - It advertises itself on the local network by mDNS (`_controlled._tcp`).
   - It receives input and replays it with Windows' `SendInput`: relative mouse moves, scroll, buttons, keys by scancode, text by Unicode, and media keys.
-- **Transport:**
-  - one TLS connection (TCP, no delay) for keys, text and control;
-  - UDP for pointer moves and scroll, each packet authenticated with a key from the TLS session, so nobody else on the Wi-Fi can move the mouse;
-  - lost moves aren't resent: the next one carries the motion.
-- **Pairing:** the same scheme as the Android TV Remote that Controlled already speaks.
-  - Each side has its own certificate.
-  - The code on the PC screen proves that the phone is talking to that PC.
-  - The PC remembers the phone's certificate and refuses any other.
+- **Transport and security** (built in step 2, see `pc/src/crypto.rs` and `SmoothCrypto.kt`, with shared known answers):
+  - Each side has a long-term P-256 key. The session keys come from ECDH of the two keys, salted with both sides' nonces (HKDF-SHA256). This is standard on Android 8+ and in Rust, with no TLS stack.
+  - **Pairing is a numeric comparison:** both screens show the same 6-digit code, computed from both hellos. The PC asks "Let <phone> control this PC?"; a machine in the middle would make the two codes differ. The PC remembers the phone's key.
+  - **TCP** carries the hello, then sealed reliable events (buttons, text, keys). **UDP** carries sealed moves and scroll. Each message is AES-256-GCM with a channel byte and a counter that only grows, so replayed or late packets are dropped. UDP is only accepted from the address of the current session.
 - **Phone:**
   - the PC link gains a Wi-Fi path next to Bluetooth;
   - the PC is found with NsdManager, as Google TVs are now;
   - switching between Wi-Fi and Bluetooth is automatic.
 - **Firewall and packaging:** the inbound rule is declared in the MSIX manifest (`desktop2:FirewallRules`), private networks only, so Windows shouldn't ask. This is verified on a real install before the Store submission.
 - **Repo:** the PC program lives in `pc/` in this repo (open source, like the app).
-- **Tools to install on this PC:** the .NET SDK and the Windows SDK (makeappx, signtool), both from Microsoft through winget.
+- **Tools:** Rust (rustup, GNU toolchain, no Visual Studio). The Windows SDK (makeappx, signtool) is installed later, for packaging.
 
 ## Steps (each ends with a measurement)
 1. **Prove smoothness first.**
