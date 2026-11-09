@@ -90,7 +90,7 @@ pub fn run() {
         .expect("window");
     let proxy = event_loop.create_proxy();
     let webview = WebViewBuilder::new(&window)
-        .with_html(include_str!("ui.html").replace("{{LOGO}}", include_str!("logo.b64").trim()))
+        .with_html(include_str!("ui.html").replace("{{LOGO}}", include_str!("logo.b64").trim()).replace("{{LANG}}", &std::env::var("CONTROLLED_LANG").unwrap_or_default()))
         .with_ipc_handler(move |cmd: String| {
             let _ = proxy.send_event(cmd);
         })
