@@ -132,15 +132,21 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
     }
 }
 
-/// Whether the window in front is out of reach of simulated input ([admin_front]), kept current by Windows' own
+/// What's in front, as the phone's 'E' frames say it: a normal window, one run as administrator (simulated clicks and
+/// keys don't reach it), or Windows' secure screen (Ctrl+Alt+Del, lock, UAC: the pointer doesn't either).
+const NORMAL: u8 = b'0';
+const ADMIN: u8 = b'1';
+const SECURE: u8 = b'2';
+
+/// What's in front ([front]), kept current by Windows' own
 /// notices ([watch_front]); the condvar wakes each session's writer when it changes.
-static FRONT: (std::sync::Mutex<bool>, std::sync::Condvar) = (std::sync::Mutex::new(false), std::sync::Condvar::new());
+static FRONT: (std::sync::Mutex<u8>, std::sync::Condvar) = (std::sync::Mutex::new(NORMAL), std::sync::Condvar::new());
 
 fn front_changed() {
-    let now = admin_front();
-    let mut admin = FRONT.0.lock().unwrap();
-    if *admin != now {
-        *admin = now;
+    let now = front();
+    let mut current = FRONT.0.lock().unwrap();
+    if *current != now {
+        *current = now;
         FRONT.1.notify_all();
     }
 }
@@ -166,20 +172,20 @@ fn watch_front() {
     });
 }
 
-/// The only writer to the phone once allowed, so frames never interleave: "E1"/"E0" when an administrator window comes
-/// to the front or leaves (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
+/// The only writer to the phone once allowed, so frames never interleave: "E0"/"E1"/"E2" when what's in front changes
+/// (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
 /// [HEARTBEAT] without anything else. Ends when the socket closes.
 fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
-    let (mut counter, mut told) = (1u64, false);
+    let (mut counter, mut told) = (1u64, NORMAL);
     loop {
-        let admin = {
+        let now = {
             let guard = FRONT.0.lock().unwrap();
-            *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |admin| *admin == told).unwrap().0
+            *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |front| *front == told).unwrap().0
         };
-        let frame = if admin != told {
-            told = admin;
+        let frame = if now != told {
+            told = now;
             counter += 1;
-            crypto::seal(to_phone, crypto::TCP, counter, if admin { b"E1" } else { b"E0" })
+            crypto::seal(to_phone, crypto::TCP, counter, &[b'E', now])
         } else {
             Vec::new()
         };
@@ -189,10 +195,10 @@ fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
     }
 }
 
-/// Whether Windows refuses this program's simulated clicks and keys in the window in front: an app run as
-/// administrator (Task Manager, for an administrator), the UAC prompt or the lock screen. A process this program can't
-/// even open (a protected one) counts as reachable: wrongly calling it blocked would mislead more than missing it.
-fn admin_front() -> bool {
+/// What's in front: Windows' secure screen (Ctrl+Alt+Del, lock, UAC: no foreground window on this desktop), an app run
+/// as administrator (Task Manager, for an administrator), or anything else. A process this program can't even open (a
+/// protected one) counts as normal: wrongly calling it blocked would mislead more than missing it.
+fn front() -> u8 {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
     use windows_sys::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -200,25 +206,25 @@ fn admin_front() -> bool {
     unsafe {
         let w = GetForegroundWindow();
         if w == 0 {
-            return true; // the UAC prompt or the lock screen: another desktop
+            return SECURE;
         }
         let mut pid = 0;
         GetWindowThreadProcessId(w, &mut pid);
         let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if p == 0 {
-            return false;
+            return NORMAL;
         }
         let mut token = 0;
         let opened = OpenProcessToken(p, TOKEN_QUERY, &mut token) != 0;
         CloseHandle(p);
         if !opened {
-            return true; // its token is closed to this program: a higher one
+            return ADMIN; // its token is closed to this program: a higher one
         }
         let mut e = TOKEN_ELEVATION { TokenIsElevated: 0 };
         let mut len = 0;
         let ok = GetTokenInformation(token, TokenElevation, &mut e as *mut _ as *mut _, std::mem::size_of::<TOKEN_ELEVATION>() as u32, &mut len) != 0;
         CloseHandle(token);
-        ok && e.TokenIsElevated != 0
+        if ok && e.TokenIsElevated != 0 { ADMIN } else { NORMAL }
     }
 }
 

@@ -108,7 +108,7 @@ class SmoothLink(context: Context) {
      * the heartbeat stops: a PC asleep or off the network sends no goodbye. Older PCs send none, so the wait only
      * starts with the first one.
      */
-    fun awaitClose(onBlocked: (Boolean) -> Unit) {
+    fun awaitClose(onFront: (Front) -> Unit) {
         runCatching {
             val input = DataInputStream(tcp.getInputStream())
             var last = 1L
@@ -122,8 +122,8 @@ class SmoothLink(context: Context) {
                 val (counter, e) = SmoothCrypto.open(keys.toPhone, SmoothCrypto.TCP, f) ?: continue
                 if (counter <= last) continue
                 last = counter
-                // PC 1.0.3+: the window in front refuses simulated input (an administrator's app, the UAC prompt).
-                if (e.contentEquals(BLOCKED)) onBlocked(true) else if (e.contentEquals(UNBLOCKED)) onBlocked(false)
+                // PC 1.0.3+: what's in front, when it changes (E0 normal, E1 an administrator's window, E2 the secure screen).
+                if (e.size == 2 && e[0] == 'E'.code.toByte()) Front.entries.getOrNull(e[1] - '0'.code.toByte())?.let(onFront)
             }
         }
     }
@@ -139,9 +139,6 @@ class SmoothLink(context: Context) {
         runCatching { tcp.close() }; udp.close()
     }
 }
-
-private val BLOCKED = "E1".toByteArray()
-private val UNBLOCKED = "E0".toByteArray()
 
 /** Three missed heartbeats (PC 1.0.1 sends one every 2 s): the PC is gone, back to Bluetooth. */
 private const val HEARTBEAT_LOST_MS = 6_000

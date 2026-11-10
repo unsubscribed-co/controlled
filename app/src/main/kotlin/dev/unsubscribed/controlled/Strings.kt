@@ -153,6 +153,7 @@ interface Strings {
     val pcUnsupported: String
     val pcBusy: String
     val adminBlocked: String
+    val secureBlocked: String
     val useBluetooth: String
     val fixKeys: String
     val fixKeysBody: String
@@ -376,6 +377,7 @@ object En : Strings {
     override val pcBusy = "Another app on this phone is acting as its keyboard (another remote app?). Close it to control this PC"
     override val fixKeys = "Fix keyboard and mouse"
     override val adminBlocked = "Windows blocks smooth mode in administrator windows."
+    override val secureBlocked = "Windows blocks smooth mode on this screen."
     override val useBluetooth = "Use Bluetooth"
     override val fixKeysBody = "If keys repeat, the wrong characters come out or the pointer acts strange, the PC kept an old setup for this phone (another remote app can cause it).\n\nOn the PC, open Settings > Bluetooth & devices and remove this phone. Then tap Add a PC and pair again."
     override val addPcSlow = "Still waiting? Keep this screen open while the PC adds the phone. If the PC already lists this phone, remove it there and add it again."
@@ -593,6 +595,7 @@ object Es : Strings {
     override val pcBusy = "Otra app de este celular está funcionando como su teclado (¿otra app de control remoto?). Ciérrala para controlar este PC"
     override val fixKeys = "Arreglar teclado y mouse"
     override val adminBlocked = "Windows bloquea el modo fluido en ventanas de administrador."
+    override val secureBlocked = "Windows bloquea el modo fluido en esta pantalla."
     override val useBluetooth = "Usar Bluetooth"
     override val fixKeysBody = "Si las teclas se repiten, salen caracteres equivocados o el puntero se comporta raro, el PC guardó una configuración vieja de este celular (otra app de control remoto puede causarlo).\n\nEn el PC, abre Configuración > Bluetooth y dispositivos y quita este celular. Luego toca Agregar un PC y empareja de nuevo."
     override val addPcSlow = "¿Sigue esperando? Deja esta pantalla abierta mientras el PC agrega el teléfono. Si el PC ya muestra este teléfono, quítalo ahí y agrégalo otra vez."

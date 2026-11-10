@@ -23,20 +23,30 @@ class SmoothTest {
         assertEquals(null, smoothHost(listOf(v6)))
     }
 
-    @Test fun bluetoothHereLastsWhileTheAdminWindowIsInFrontAndUntilNothingIsHeld() {
-        assertEquals(true, bluetoothHere(chosen = true, adminFront = true, holding = false))
+    @Test fun bluetoothHereLastsWhileWindowsBlocksAndUntilNothingIsHeld() {
+        assertEquals(true, bluetoothHere(chosen = true, front = Front.Admin, holding = false))
+        assertEquals(true, bluetoothHere(chosen = true, front = Front.Secure, holding = false))
         // The window went away mid-drag: the button's release must go the same way as its press.
-        assertEquals(true, bluetoothHere(chosen = true, adminFront = false, holding = true))
-        assertEquals(false, bluetoothHere(chosen = true, adminFront = false, holding = false))
-        assertEquals(false, bluetoothHere(chosen = false, adminFront = true, holding = false))
+        assertEquals(true, bluetoothHere(chosen = true, front = Front.Normal, holding = true))
+        assertEquals(false, bluetoothHere(chosen = true, front = Front.Normal, holding = false))
+        assertEquals(false, bluetoothHere(chosen = false, front = Front.Admin, holding = false))
     }
 
-    @Test fun theAdminHintComesOnceAndOnlyForWhatWindowsBlocks() {
-        // Moving the pointer over an administrator window works; clicks and keys don't.
-        assertEquals(false, adminHint(adminFront = true, hinted = false, blockedKind = false))
-        assertEquals(true, adminHint(adminFront = true, hinted = false, blockedKind = true))
-        assertEquals(false, adminHint(adminFront = true, hinted = true, blockedKind = true))
-        assertEquals(false, adminHint(adminFront = false, hinted = false, blockedKind = true))
+    @Test fun theHintComesOnceAndOnlyForWhatWindowsBlocks() {
+        // Over an administrator window the pointer still moves; clicks and keys don't.
+        assertEquals(false, adminHint(Front.Admin, hinted = false, move = true))
+        assertEquals(true, adminHint(Front.Admin, hinted = false, move = false))
+        // Ctrl+Alt+Del, the lock screen and the UAC prompt take the pointer too (2026-11-10: it stopped there).
+        assertEquals(true, adminHint(Front.Secure, hinted = false, move = true))
+        assertEquals(false, adminHint(Front.Secure, hinted = true, move = false))
+        assertEquals(false, adminHint(Front.Normal, hinted = false, move = false))
+    }
+
+    @Test fun aKeyThatOpensTheSecureScreenCountsAsItUntilThePcSaysOtherwise() {
+        assertEquals(Front.Secure, effectiveFront(Front.Normal, expectingSecure = true))
+        assertEquals(Front.Secure, effectiveFront(Front.Secure, expectingSecure = false))
+        assertEquals(Front.Admin, effectiveFront(Front.Admin, expectingSecure = false))
+        assertEquals(Front.Normal, effectiveFront(Front.Normal, expectingSecure = false))
     }
 
     @Test fun aSessionThatEndedReconnectsAtOnce() {

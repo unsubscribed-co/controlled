@@ -130,7 +130,7 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     // The administrator window leaving clears the key, which takes the message away with it.
     LaunchedEffect(hid.adminHintDue) {
         if (!hid.adminHintDue) return@LaunchedEffect
-        val result = snack.showSnackbar(t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long)
+        val result = snack.showSnackbar(if (hid.front == Front.Secure) t.secureBlocked else t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long)
         hid.adminHintShown()
         if (result == SnackbarResult.ActionPerformed) hid.useBluetoothHere()
     }

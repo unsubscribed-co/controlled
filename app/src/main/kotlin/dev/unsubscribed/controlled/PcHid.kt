@@ -30,16 +30,26 @@ enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported,
 enum class Smooth { Off, Pairing, On }
 
 /**
- * Smooth mode is on but the person chose Bluetooth for an administrator window: it lasts while that window is in
- * front, and after it, until nothing is held, so a press and its release always go the same way.
+ * What's in front of the PC, as far as smooth mode goes (PC 1.0.3+). Admin: a window run as administrator, where Windows
+ * ignores simulated clicks and keys but the pointer still moves. Secure: Ctrl+Alt+Del, the lock screen or the UAC
+ * prompt, Windows' separate screen, where the pointer stops too (measured 2026-11-10).
  */
-fun bluetoothHere(chosen: Boolean, adminFront: Boolean, holding: Boolean) = chosen && (adminFront || holding)
+enum class Front { Normal, Admin, Secure }
 
 /**
- * Whether to tell the person, once per administrator window, that Windows blocks smooth mode there: only when they
- * try what Windows blocks (a click, a key, text, scroll), not for moving the pointer, which still works.
+ * Smooth mode is on but input goes over Bluetooth for what Windows blocks: it lasts while that's in front, and after
+ * it, until nothing is held, so a press and its release always go the same way.
  */
-fun adminHint(adminFront: Boolean, hinted: Boolean, blockedKind: Boolean) = adminFront && !hinted && blockedKind
+fun bluetoothHere(chosen: Boolean, front: Front, holding: Boolean) = chosen && (front != Front.Normal || holding)
+
+/**
+ * Whether to tell the person, once per blocked screen, that Windows blocks smooth mode there: only when they try what
+ * it blocks. Over an administrator window that's clicks, keys, text and scroll; on the secure screen moving too.
+ */
+fun adminHint(front: Front, hinted: Boolean, move: Boolean) = front != Front.Normal && !hinted && (!move || front == Front.Secure)
+
+/** Ctrl+Alt+Del or Lock PC was just sent: the secure screen is coming, though the PC hasn't said so yet. */
+fun effectiveFront(front: Front, expectingSecure: Boolean) = if (expectingSecure && front == Front.Normal) Front.Secure else front
 
 /** How a try at smooth mode ended. */
 enum class SmoothEnd { NotFound, Unreachable, Declined, Ended }
@@ -116,10 +126,10 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
                 return@Thread
             }
             handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On; smoothMisses = 0 } }
-            link.awaitClose { admin -> handler.post { if (wifi === link) adminFrontChanged(admin) } }
+            link.awaitClose { front -> handler.post { if (wifi === link) frontChanged(front) } }
             log { "smooth: session closed" }
             handler.post {
-                if (wifi === link) { wifi = null; smooth = Smooth.Off; adminFrontChanged(false); useBluetooth = false }
+                if (wifi === link) { wifi = null; smooth = Smooth.Off; frontChanged(Front.Normal); useBluetooth = false }
                 link.close()
                 if (run == smoothRun) smoothEnded(address, run, SmoothEnd.Ended)
             }
@@ -161,49 +171,58 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         smoothMisses = 0
         wifi?.let { w -> io.post { w.close() } }
         wifi = null
-        adminFrontChanged(false)
+        frontChanged(Front.Normal)
+        expectingSecure = false
+        handler.removeCallbacks(secureLate)
         useBluetooth = false
         smooth = Smooth.Off
         smoothCode = null
     }
 
-    /** The smooth link, while it carries input. */
-    /**
-     * The PC (1.0.3+) says the window in front runs as administrator, or it's the UAC prompt or the lock screen:
-     * Windows ignores simulated clicks and keys there, which smooth mode is. Information only: input keeps its way.
-     */
-    var adminFront by mutableStateOf(false)
+    /** What's in front of the PC, from the PC (1.0.3+). Information only: input keeps its way until the person chooses. */
+    var front by mutableStateOf(Front.Normal)
         private set
-    /** Show, once, that Windows blocks smooth mode here, with Use Bluetooth (PcScreen's snackbar). */
+    /** Show, once per blocked screen, that Windows blocks smooth mode there, with Use Bluetooth (PcScreen's snackbar). */
     var adminHintDue by mutableStateOf(false)
         private set
     private var hinted = false
-    /** The person chose Bluetooth for the administrator window in front ([bluetoothHere]). */
+    /** Input goes over Bluetooth for what Windows blocks ([bluetoothHere]): the person chose it, or pressed Ctrl+Alt+Del. */
     private var useBluetooth by mutableStateOf(false)
+    /** Ctrl+Alt+Del or Lock PC went out; the PC will report the secure screen ([effectiveFront]). */
+    private var expectingSecure = false
+    /** The secure screen never came (Windows didn't open it): back to smooth mode. */
+    private val secureLate = Runnable { expectingSecure = false; backToSmooth() }
 
-    private fun adminFrontChanged(admin: Boolean) {
-        if (admin == adminFront) return
-        log { "smooth: administrator window in front=$admin" }
-        adminFront = admin
-        if (!admin) {
-            hinted = false
-            adminHintDue = false
-            // Back to smooth mode at once, unless something is held (then at its release, in smoothLink).
-            if (!bluetoothHere(useBluetooth, false, held != 0 || switching)) useBluetooth = false
+    private fun frontChanged(now: Front) {
+        if (now == Front.Secure) {
+            expectingSecure = false
+            handler.removeCallbacks(secureLate)
         }
+        if (now == front) return
+        log { "smooth: in front: $now" }
+        front = now
+        hinted = false
+        adminHintDue = false
+        backToSmooth()
     }
 
-    /** Input goes over Wi-Fi: smooth mode is on and the person didn't choose Bluetooth for the window in front. */
+    /** Back over Wi-Fi once nothing blocks it and nothing is held (else at the release, in smoothLink). */
+    private fun backToSmooth() {
+        if (useBluetooth && !bluetoothHere(true, effectiveFront(front, expectingSecure), held != 0 || switching)) useBluetooth = false
+    }
+
+    /** Input goes over Wi-Fi: smooth mode is on and nothing has it go over Bluetooth for now. */
     val smoothActive get() = smooth == Smooth.On && !useBluetooth
 
+    /** The smooth link, while it carries input. */
     private fun smoothLink(): SmoothLink? {
-        if (useBluetooth && !bluetoothHere(true, adminFront, held != 0 || switching)) useBluetooth = false
+        backToSmooth()
         return wifi.takeIf { smooth == Smooth.On && !useBluetooth }
     }
 
-    /** Something Windows blocks in an administrator window (not a pointer move) is about to go over Wi-Fi. */
-    private fun tried() {
-        if (smoothLink() != null && adminHint(adminFront, hinted, blockedKind = true)) {
+    /** Something is about to go over Wi-Fi: if Windows blocks it in front, say so once. */
+    private fun tried(move: Boolean) {
+        if (smoothLink() != null && adminHint(front, hinted, move)) {
             hinted = true
             adminHintDue = true
         }
@@ -213,7 +232,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         adminHintDue = false
     }
 
-    /** The person tapped Use Bluetooth: let go of everything over Wi-Fi first, so nothing stays held on the PC. */
+    /** Over Bluetooth from now on, for what's in front: let go of everything over Wi-Fi first, so nothing stays held. */
     fun useBluetoothHere() {
         adminHintDue = false
         val w = smoothLink() ?: return
@@ -223,15 +242,23 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         smoothSend(w) { report(Hid.KEYBOARD, Hid.keyboard(0, 0)) }
         smoothSend(w) { report(Hid.MOUSE, Hid.mouse(0, 0, 0)) }
         useBluetooth = true
-        log { "smooth: Bluetooth for the administrator window" }
+        log { "smooth: Bluetooth for what's in front" }
     }
 
     /**
-     * A key over Bluetooth even in smooth mode: Windows never takes Ctrl+Alt+Del from a program that simulates keys,
-     * and protects locking the same way; from a Bluetooth keyboard both work. Without Bluetooth, the usual way.
+     * Ctrl+Alt+Del and Lock PC, over Bluetooth even in smooth mode: Windows never takes them from a program that
+     * simulates keys, and from a Bluetooth keyboard both work. They open the secure screen, where the pointer only
+     * moves over Bluetooth too: input stays on it until the PC reports the screen gone (or it never came in 3 s).
+     * Without Bluetooth, the usual way.
      */
     fun realKey(mods: Int, key: Int) {
         if (host == null) return key(mods, key)
+        if (smoothLink() != null) {
+            useBluetoothHere()
+            expectingSecure = true
+            handler.removeCallbacks(secureLate)
+            handler.postDelayed(secureLate, Hid.SECURE_WAIT_MS)
+        }
         if (outbox.add(Hid.KEYBOARD, Hid.keyboard(mods, key))) drain()
         if (outbox.add(Hid.KEYBOARD, Hid.keyboard(0, 0))) drain()
     }
@@ -366,7 +393,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private val drain: Runnable = Runnable { drain() }
 
     private fun send(id: Int, report: ByteArray) {
-        tried()
+        tried(move = false)
         smoothLink()?.let { w -> smoothSend(w) { report(id, report) }; return }
         if (host != null && outbox.add(id, report)) drain()
     }
@@ -406,6 +433,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** One report per move, whatever its size (16-bit deltas), so a quick flick never arrives in pieces. */
     fun move(dx: Int, dy: Int) {
+        tried(move = true)
         smoothLink()?.let { w -> smoothSend(w) { move(dx, dy) }; return }
         if (host != null && outbox.move(held, dx, dy)) drain()
     }
@@ -434,7 +462,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     /** Types [text] as the PC's [layout] reads keys; characters it can't type are skipped. */
     fun type(text: String) {
         // Smooth mode types the characters themselves: the PC's layout doesn't matter.
-        tried()
+        tried(move = false)
         smoothLink()?.let { w -> smoothSend(w) { text(text) }; return }
         for (c in text) Keymap.strokes(c, layout)?.forEach { key(it.mods, it.key) }
     }
@@ -552,6 +580,8 @@ object Hid {
     const val RETRY_MS = 5_000L
     /** How often smooth mode looks for the PC program again while the PC's screen is open. */
     const val SMOOTH_RETRY_MS = 20_000L
+    /** How long Ctrl+Alt+Del or Lock PC keeps input on Bluetooth before the PC reports the secure screen. */
+    const val SECURE_WAIT_MS = 3_000L
     /** Controlled for PC in the Microsoft Store (Partner Center product 9N08NXM529FH). */
     const val STORE_LINK = "ms-windows-store://pdp/?ProductId=9N08NXM529FH"
     /** How long Windows' Run box gets to open before the link is typed. */
