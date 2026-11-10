@@ -620,6 +620,13 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
+    /** Dev test only (MainActivity's tv_ip): the TV now 'lives' at [ip], as after a router change. */
+    fun devMoveTv(ip: String) {
+        val paired = tv ?: return
+        save(paired.copy(ip = ip))
+        connect()
+    }
+
     /** Turn on: the wake shots (Bluetooth, IR, Wake-on-LAN), then [keepConnected] tries every second for [WAKE_MS]. */
     fun powerOn() {
         val paired = tv ?: return

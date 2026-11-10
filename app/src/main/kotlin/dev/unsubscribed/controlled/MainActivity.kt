@@ -81,6 +81,8 @@ class MainActivity : ComponentActivity() {
             }
             log { "ir power arg=$a emitter=${IrWake.hasEmitter(this)} sent=${code != null && IrWake.powerOn(this, code)}" }
         }
+        // Reconnect test: --es tv_ip <wrong ip> makes the TV look moved, so the loop has to find it again (no router needed).
+        if (BuildConfig.LOG) intent?.getStringExtra("tv_ip")?.let(model::devMoveTv)
         // Smooth-mode prototype: --es wifi_mouse <pc ip> (WifiMouse).
         if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
         if (intent?.action != Intent.ACTION_SEND) return
