@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub const PORT: u16 = 47805;
+/// How often a session's heartbeat goes to the phone.
+const HEARTBEAT: Duration = Duration::from_secs(2);
 
 struct Session {
     phone: IpAddr,
@@ -84,6 +86,7 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
         let allowed = rx.recv_timeout(Duration::from_secs(85)).unwrap_or(false);
         shared.lock().unwrap().ask = None;
         if !allowed {
+            let _ = write_frame(&mut s, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"NO"));
             return;
         }
         state::allow(&phone_key, &name);
@@ -98,6 +101,13 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
         st.session = s.try_clone().ok().map(|c| (c, phone_key.clone()));
     }
     *session.lock().unwrap() = Some(Session { phone: phone_ip, keys: crypto::Keys { to_pc: keys.to_pc.clone(), to_phone: keys.to_phone }, last_udp: 0 });
+    if let Ok(mut beat) = s.try_clone() {
+        std::thread::spawn(move || {
+            while beat.write_all(&[0, 0]).is_ok() {
+                std::thread::sleep(HEARTBEAT);
+            }
+        });
+    }
     let mut last = 0u64;
     let mut held = input::Input::default();
     // Pausing or removing this phone in the window shuts the socket down, which ends this loop.
@@ -112,6 +122,7 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
     }
     // Never leave a key or button held on this PC when the phone goes.
     input::run(&mut enigo.lock().unwrap(), held.release_all());
+    let _ = s.shutdown(std::net::Shutdown::Both); // ends the heartbeat, which holds a clone of this socket
     let mut cur = session.lock().unwrap();
     if cur.as_ref().is_some_and(|c| c.phone == phone_ip) {
         *cur = None;
@@ -132,12 +143,12 @@ fn advertise() -> Option<mdns_sd::ServiceDaemon> {
 }
 
 /// Starts the network side in background threads. `show` opens the window (for a pairing to allow).
-pub fn start(udp: UdpSocket, listener: TcpListener, shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
+pub fn start(udps: Vec<UdpSocket>, listeners: Vec<TcpListener>, shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
     let key = Arc::new(load_key());
     let session: Arc<Mutex<Option<Session>>> = Arc::new(Mutex::new(None));
     let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).expect("input injection unavailable")));
     std::mem::forget(advertise()); // lives as long as the program
-    {
+    for udp in udps {
         let (session, enigo, shared) = (session.clone(), enigo.clone(), shared.clone());
         std::thread::spawn(move || {
             let mut buf = [0u8; 512];
@@ -161,12 +172,15 @@ pub fn start(udp: UdpSocket, listener: TcpListener, shared: Shared, show: Arc<dy
             }
         });
     }
-    std::thread::spawn(move || {
-        for s in listener.incoming().flatten() {
-            let (key, shared, session, enigo, show) = (key.clone(), shared.clone(), session.clone(), enigo.clone(), show.clone());
-            std::thread::spawn(move || handle(s, &key, &shared, &session, &enigo, &*show));
-        }
-    });
+    for listener in listeners {
+        let (key, shared, session, enigo, show) = (key.clone(), shared.clone(), session.clone(), enigo.clone(), show.clone());
+        std::thread::spawn(move || {
+            for s in listener.incoming().flatten() {
+                let (key, shared, session, enigo, show) = (key.clone(), shared.clone(), session.clone(), enigo.clone(), show.clone());
+                std::thread::spawn(move || handle(s, &key, &shared, &session, &enigo, &*show));
+            }
+        });
+    }
 }
 
 #[cfg(test)]

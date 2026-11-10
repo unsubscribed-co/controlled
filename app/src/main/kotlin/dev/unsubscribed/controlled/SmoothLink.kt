@@ -96,9 +96,19 @@ class SmoothLink(context: Context) {
         }
     }
 
-    /** Blocks until the PC closes the connection (or it breaks). */
+    /**
+     * Blocks until the PC closes the connection, it breaks, or (from PC 1.0.1, which sends an empty frame every 2 s)
+     * the heartbeat stops: a PC asleep or off the network sends no goodbye. Older PCs send none, so the wait only
+     * starts with the first one.
+     */
     fun awaitClose() {
-        runCatching { val input = DataInputStream(tcp.getInputStream()); while (true) input.skipBytes(input.readUnsignedShort()) }
+        runCatching {
+            val input = DataInputStream(tcp.getInputStream())
+            while (true) {
+                val n = input.readUnsignedShort()
+                if (n == 0) tcp.soTimeout = HEARTBEAT_LOST_MS else input.skipBytes(n)
+            }
+        }
     }
 
     private fun datagram(e: ByteArray) {
@@ -113,7 +123,10 @@ class SmoothLink(context: Context) {
     }
 }
 
-/** The PC program listens on IPv4 only: of the addresses mDNS gives, its IPv4 one (a link-local IPv6 timed out). */
+/** Three missed heartbeats (PC 1.0.1 sends one every 2 s): the PC is gone, back to Bluetooth. */
+private const val HEARTBEAT_LOST_MS = 6_000
+
+/** Of the addresses mDNS gives, the IPv4 one: PC 1.0.0 listens on IPv4 only (a link-local IPv6 timed out). */
 fun smoothHost(addresses: List<InetAddress>): InetAddress? = addresses.firstOrNull { it is Inet4Address }
 
 /**

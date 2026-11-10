@@ -15,6 +15,12 @@ use std::net::{TcpListener, UdpSocket};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 
+/// Windows says how the package was launched: its startup task at sign-in, or the person opening it.
+fn started_at_sign_in() -> bool {
+    use windows::ApplicationModel::{Activation::ActivationKind, AppInstance};
+    AppInstance::GetActivatedEventArgs().and_then(|a| a.Kind()).is_ok_and(|k| k == ActivationKind::StartupTask)
+}
+
 fn spawn_window() -> Option<Child> {
     Command::new(std::env::current_exe().ok()?).arg("--window").spawn().ok()
 }
@@ -43,11 +49,14 @@ fn main() {
         }
         *w = spawn_window();
     });
-    server::start(udp, listener, shared.clone(), show.clone());
+    // IPv6 too, next to IPv4 (on Windows an IPv6 socket doesn't take IPv4): optional, the network may not have it.
+    let udps = [Some(udp), UdpSocket::bind(("::", server::PORT)).ok()].into_iter().flatten().collect();
+    let listeners = [Some(listener), TcpListener::bind(("::", server::PORT)).ok()].into_iter().flatten().collect();
+    server::start(udps, listeners, shared.clone(), show.clone());
     control::start(shared.clone());
-    let welcomed = state::dir().join("welcomed");
-    if !welcomed.exists() {
-        let _ = std::fs::write(&welcomed, b"");
+    // Opened from Start or the Store: show the window (1.0.0 only did on its very first run, and an old marker left
+    // by an uninstall kept it in the tray). Started by Windows at sign-in: stay in the tray.
+    if !started_at_sign_in() {
         show();
     }
     tray::run(shared, show);
