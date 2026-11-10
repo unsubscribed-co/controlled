@@ -104,10 +104,10 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
                 return@Thread
             }
             handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On; smoothMisses = 0 } }
-            link.awaitClose()
+            link.awaitClose { blocked -> handler.post { if (wifi === link) { pcBlocked = blocked; log { "smooth: pc refuses simulated input=$blocked" } } } }
             log { "smooth: session closed" }
             handler.post {
-                if (wifi === link) { wifi = null; smooth = Smooth.Off }
+                if (wifi === link) { wifi = null; smooth = Smooth.Off; pcBlocked = false }
                 link.close()
                 if (run == smoothRun) smoothEnded(address, run, SmoothEnd.Ended)
             }
@@ -149,12 +149,29 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         smoothMisses = 0
         wifi?.let { w -> io.post { w.close() } }
         wifi = null
+        pcBlocked = false
         smooth = Smooth.Off
         smoothCode = null
     }
 
     /** The smooth link, while it carries input. */
-    private fun smoothLink() = wifi.takeIf { smooth == Smooth.On }
+    /**
+     * The PC says the window in front refuses simulated input (an app run as administrator, Task Manager, the UAC
+     * prompt): input goes over Bluetooth, a real keyboard to Windows, until it says otherwise.
+     */
+    private var pcBlocked = false
+
+    private fun smoothLink() = wifi.takeIf { smooth == Smooth.On && !pcBlocked }
+
+    /**
+     * A key over Bluetooth even in smooth mode: Windows never takes Ctrl+Alt+Del from a program that simulates keys,
+     * and protects locking the same way; from a Bluetooth keyboard both work.
+     */
+    fun realKey(mods: Int, key: Int) {
+        if (host == null) return
+        if (outbox.add(Hid.KEYBOARD, Hid.keyboard(mods, key))) drain()
+        if (outbox.add(Hid.KEYBOARD, Hid.keyboard(0, 0))) drain()
+    }
 
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null

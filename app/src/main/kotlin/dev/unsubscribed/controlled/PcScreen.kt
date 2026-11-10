@@ -303,10 +303,10 @@ private val TOOLS: Map<Tools, List<Shortcut>> = mapOf(
         Shortcut(R.drawable.sym_settings, { pcSettings }, send = win(Keymap.letter('i'))),
         Shortcut(R.drawable.sym_browse_activity, { tasks }, { taskManager }) { key(Keymap.CTRL or Keymap.SHIFT, Keymap.ESC) },
         Shortcut(R.drawable.sym_terminal, { runDialog }, send = win(Keymap.letter('r'))),
-        Shortcut(R.drawable.sym_lock, { lockPc }, send = win(Keymap.letter('l'))),
+        Shortcut(R.drawable.sym_lock, { lockPc }) { realKey(Keymap.GUI, Keymap.letter('l')) },
         Shortcut(R.drawable.sym_screenshot_region, { snip }, { snipName }) { key(Keymap.GUI or Keymap.SHIFT, Keymap.letter('s')) },
         // Windows takes Ctrl+Alt+Del from a Bluetooth keyboard too: the security screen (lock, switch user, sign out).
-        Shortcut(R.drawable.sym_shield, { ctrlAltDel }) { key(Keymap.CTRL or Keymap.ALT, Keymap.DELETE) },
+        Shortcut(R.drawable.sym_shield, { ctrlAltDel }) { realKey(Keymap.CTRL or Keymap.ALT, Keymap.DELETE) },
     ),
     // Windows' display modes, in its Win+P menu's order.
     Tools.Screen to listOf(
