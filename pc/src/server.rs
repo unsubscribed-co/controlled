@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub const PORT: u16 = 47805;
-/// How often a session's heartbeat goes to the phone (when nothing else did).
+/// How long a session goes without writing to the phone before it sends the heartbeat.
 const HEARTBEAT: Duration = Duration::from_secs(2);
 
 struct Session {
@@ -132,36 +132,67 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
     }
 }
 
-/// The only writer to the phone once allowed: an empty frame every [HEARTBEAT], and "E1"/"E0" when the window in front
-/// starts or stops refusing simulated input (see [input_blocked]), so the phone sends over Bluetooth meanwhile. Ends
-/// when the socket closes.
-fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
-    let (mut counter, mut blocked, mut seen, mut last) = (1u64, false, false, std::time::Instant::now() - HEARTBEAT);
-    loop {
-        let now = input_blocked();
-        // Two readings in a row: a window switch can leave no foreground window for an instant.
-        let frame = if now != blocked && now == seen {
-            blocked = now;
-            counter += 1;
-            crypto::seal(to_phone, crypto::TCP, counter, if now { b"E1" } else { b"E0" })
-        } else if last.elapsed() >= HEARTBEAT {
-            Vec::new()
-        } else {
-            seen = now;
-            std::thread::sleep(Duration::from_millis(250));
-            continue;
-        };
-        seen = now;
-        if !write_frame(out, &frame) {
-            return;
-        }
-        last = std::time::Instant::now();
+/// Whether the window in front is out of reach of simulated input ([admin_front]), kept current by Windows' own
+/// notices ([watch_front]); the condvar wakes each session's writer when it changes.
+static FRONT: (std::sync::Mutex<bool>, std::sync::Condvar) = (std::sync::Mutex::new(false), std::sync::Condvar::new());
+
+fn front_changed() {
+    let now = admin_front();
+    let mut admin = FRONT.0.lock().unwrap();
+    if *admin != now {
+        *admin = now;
+        FRONT.1.notify_all();
     }
 }
 
-/// Whether Windows refuses this program's simulated input in the window in front: one run as administrator (Task
-/// Manager is, for an administrator), Windows' own UAC prompt, or the lock screen. A Bluetooth keyboard still works there.
-fn input_blocked() -> bool {
+unsafe extern "system" fn on_front(_: windows_sys::Win32::UI::Accessibility::HWINEVENTHOOK, _: u32, _: windows_sys::Win32::Foundation::HWND, _: i32, _: i32, _: u32, _: u32) {
+    front_changed();
+}
+
+/// Windows tells this thread when another window comes to the front, or the UAC prompt or lock screen takes over;
+/// nothing runs in between (no polling).
+fn watch_front() {
+    use windows_sys::Win32::UI::Accessibility::SetWinEventHook;
+    use windows_sys::Win32::UI::WindowsAndMessaging::*;
+    std::thread::spawn(|| unsafe {
+        for event in [EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_DESKTOPSWITCH] {
+            SetWinEventHook(event, event, 0, Some(on_front), 0, 0, WINEVENT_OUTOFCONTEXT);
+        }
+        front_changed();
+        let mut msg: MSG = std::mem::zeroed();
+        while GetMessageW(&mut msg, 0, 0, 0) > 0 {
+            DispatchMessageW(&msg);
+        }
+    });
+}
+
+/// The only writer to the phone once allowed, so frames never interleave: "E1"/"E0" when an administrator window comes
+/// to the front or leaves (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
+/// [HEARTBEAT] without anything else. Ends when the socket closes.
+fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
+    let (mut counter, mut told) = (1u64, false);
+    loop {
+        let admin = {
+            let guard = FRONT.0.lock().unwrap();
+            *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |admin| *admin == told).unwrap().0
+        };
+        let frame = if admin != told {
+            told = admin;
+            counter += 1;
+            crypto::seal(to_phone, crypto::TCP, counter, if admin { b"E1" } else { b"E0" })
+        } else {
+            Vec::new()
+        };
+        if !write_frame(out, &frame) {
+            return;
+        }
+    }
+}
+
+/// Whether Windows refuses this program's simulated clicks and keys in the window in front: an app run as
+/// administrator (Task Manager, for an administrator), the UAC prompt or the lock screen. A process this program can't
+/// even open (a protected one) counts as reachable: wrongly calling it blocked would mislead more than missing it.
+fn admin_front() -> bool {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
     use windows_sys::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -169,19 +200,19 @@ fn input_blocked() -> bool {
     unsafe {
         let w = GetForegroundWindow();
         if w == 0 {
-            return true; // the UAC prompt or the lock screen: another desktop, out of reach
+            return true; // the UAC prompt or the lock screen: another desktop
         }
         let mut pid = 0;
         GetWindowThreadProcessId(w, &mut pid);
         let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if p == 0 {
-            return true; // not even readable from here: protected, so it won't take our input either
+            return false;
         }
         let mut token = 0;
         let opened = OpenProcessToken(p, TOKEN_QUERY, &mut token) != 0;
         CloseHandle(p);
         if !opened {
-            return true;
+            return true; // its token is closed to this program: a higher one
         }
         let mut e = TOKEN_ELEVATION { TokenIsElevated: 0 };
         let mut len = 0;
@@ -207,6 +238,7 @@ pub fn start(udps: Vec<UdpSocket>, listeners: Vec<TcpListener>, shared: Shared, 
     let session: Arc<Mutex<Option<Session>>> = Arc::new(Mutex::new(None));
     let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).expect("input injection unavailable")));
     std::mem::forget(advertise()); // lives as long as the program
+    watch_front();
     for udp in udps {
         let (session, enigo, shared) = (session.clone(), enigo.clone(), shared.clone());
         std::thread::spawn(move || {

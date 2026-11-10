@@ -71,6 +71,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,12 +124,20 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     val pc = model.pc
     var changing by remember { mutableStateOf(false) }
     var offering by remember { mutableStateOf(false) }
+    val snack = remember { SnackbarHostState() }
+    // Once per administrator window, when a click or key would be lost: why, and the way out.
+    LaunchedEffect(hid.adminHintDue) {
+        if (!hid.adminHintDue) return@LaunchedEffect
+        hid.adminHintShown()
+        if (snack.showSnackbar(t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) hid.useBluetoothHere()
+    }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { ControllerTitle(pc?.name ?: t.addPcTitle, switch) }
             // The layout in sight: a wrong one is why symbols come out wrong, and one tap fixes it. Smooth mode types
             // the characters themselves, so there it doesn't matter and isn't shown.
-            if (pc != null && hid.smooth != Smooth.On) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp).widthIn(max = 150.dp)) {
+            if (pc != null && !hid.smoothActive) TextButton({ changing = true }, Modifier.heightIn(min = 48.dp).widthIn(max = 150.dp)) {
                 Icon(painterResource(R.drawable.sym_keyboard), null)
                 Text(layoutName(t, pc.layout), Modifier.padding(start = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -139,6 +151,8 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
             }
         }
         if (pc == null) AddPc(model) else Pad(hid)
+    }
+    SnackbarHost(snack, Modifier.align(Alignment.BottomCenter))
     }
     val declined = pc != null && hid.smoothDeclinedBy == pc.address
     if (offering) AlertDialog(
@@ -185,7 +199,7 @@ private fun PcStatus(hid: PcHid) {
         Box(if (link == PcLink.Connected) dot.background(colors.primary) else dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
         Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
         // Smooth mode in sight: an ember label, not just different words.
-        if (hid.smooth == Smooth.On) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = colors.primaryContainer) {
+        if (hid.smoothActive) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = colors.primaryContainer) {
             Text(t.pcSmooth, Modifier.padding(horizontal = 10.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = colors.onPrimaryContainer)
         }
     }
@@ -217,7 +231,7 @@ private fun TypeField(hid: PcHid) {
     val t = LocalStrings.current
     var text by remember { mutableStateOf("") }
     // What the PC's layout can't type (emoji, symbols it lacks) never reaches it: say so, and don't Backspace for it.
-    val typable = { c: Char -> hid.smooth == Smooth.On || Keymap.strokes(c, hid.layout) != null }
+    val typable = { c: Char -> hid.smoothActive || Keymap.strokes(c, hid.layout) != null }
     val missing = text.filterNot(typable).toSet()
     OutlinedTextField(
         text,

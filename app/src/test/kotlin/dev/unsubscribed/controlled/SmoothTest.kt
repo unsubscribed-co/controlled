@@ -23,6 +23,22 @@ class SmoothTest {
         assertEquals(null, smoothHost(listOf(v6)))
     }
 
+    @Test fun bluetoothHereLastsWhileTheAdminWindowIsInFrontAndUntilNothingIsHeld() {
+        assertEquals(true, bluetoothHere(chosen = true, adminFront = true, holding = false))
+        // The window went away mid-drag: the button's release must go the same way as its press.
+        assertEquals(true, bluetoothHere(chosen = true, adminFront = false, holding = true))
+        assertEquals(false, bluetoothHere(chosen = true, adminFront = false, holding = false))
+        assertEquals(false, bluetoothHere(chosen = false, adminFront = true, holding = false))
+    }
+
+    @Test fun theAdminHintComesOnceAndOnlyForWhatWindowsBlocks() {
+        // Moving the pointer over an administrator window works; clicks and keys don't.
+        assertEquals(false, adminHint(adminFront = true, hinted = false, blockedKind = false))
+        assertEquals(true, adminHint(adminFront = true, hinted = false, blockedKind = true))
+        assertEquals(false, adminHint(adminFront = true, hinted = true, blockedKind = true))
+        assertEquals(false, adminHint(adminFront = false, hinted = false, blockedKind = true))
+    }
+
     @Test fun aSessionThatEndedReconnectsAtOnce() {
         assertEquals(0L, smoothRetryMs(SmoothEnd.Ended, 0))
     }
