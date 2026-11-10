@@ -1,6 +1,8 @@
 <en-US>
-- Fix: on a weak or just-reconnected Wi-Fi, the TV could show as off until you restarted Wi-Fi. The remote now always talks to the TV over Wi-Fi, never mobile data.
+- Reconnecting: if your TV gets a new address (a new router or Wi-Fi), the remote finds it again on its own, and keeps looking while it waits.
+- Clearer status: "Waiting for your TV" while the remote keeps trying, and "Looking for your TV on this Wi-Fi" while it searches.
 </en-US>
 <es-419>
-- Arreglo: con un Wi-Fi débil o recién reconectado, el TV podía aparecer apagado hasta reiniciar el Wi-Fi. El control ahora siempre le habla al TV por Wi-Fi, nunca por datos móviles.
+- Reconexión: si tu TV cambia de dirección (un router o Wi-Fi nuevo), el control lo vuelve a encontrar solo, y sigue buscándolo mientras espera.
+- Estado más claro: "Esperando tu TV" mientras el control sigue intentando, y "Buscando tu TV en este Wi-Fi" mientras lo busca.
 </es-419>
