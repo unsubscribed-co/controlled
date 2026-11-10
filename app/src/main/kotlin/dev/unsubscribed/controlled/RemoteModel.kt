@@ -173,7 +173,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             // Every TV and PC is on the home Wi-Fi: without this, Android sends us over mobile data while it rechecks a
             // Wi-Fi that just came back (measured on Juan's POCO, 2026-11-09), and the TV reads as off.
             cm.bindProcessToNetwork(network)
-            viewModelScope.launch { if (visible && link == Link.NoWifi || link == Link.Off) connect() }
+            viewModelScope.launch { if (visible && (link == Link.NoWifi || link == Link.Off)) connect() }
         }
 
         override fun onLost(network: Network) {
@@ -624,6 +624,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             wakeFailed = false
             val started = System.currentTimeMillis()
             var lastPacket = 0L
+            var woke = false
             while (System.currentTimeMillis() - started < 20_000) {
                 if (System.currentTimeMillis() - lastPacket >= 10_000) {
                     WakeOnLan.send(getApplication(), paired.macs, paired.ip)
@@ -632,7 +633,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 val c = TvClient(paired.ip, http)
                 try {
                     c.connect(paired.clientKey, paired.pin)
-                    run(c)
+                    woke = true
+                    run(c) // returns when the session ends, e.g. the TV turned off later: that's not a failed wake
                     break
                 } catch (e: TvException) {
                     c.close()
@@ -644,7 +646,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 delay(1_000)
             }
             link = Link.Off
-            wakeFailed = client == null
+            wakeFailed = !woke
             if (visible) connect()
         }
     }
@@ -675,6 +677,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     private suspend fun run(c: TvClient) {
         client = c
         link = Link.Connected
+        wakeFailed = false
         val p = runCatching { c.pointer() }.getOrNull()
         pointer = p
         queue.drain(System.currentTimeMillis()).forEach { it(c, p) }
