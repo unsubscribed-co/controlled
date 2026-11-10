@@ -114,6 +114,11 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, wait)
     }
 
+    /** Wi-Fi is back: look for the PC program now, not at the next retry (up to 20 s later). Only while the PC is open. */
+    fun wifiBack() {
+        handler.post { val t = target; if (hid != null && t != null && smooth == Smooth.Off) startSmooth(t) }
+    }
+
     /** The person asks for smooth mode again after the PC said no: the PC shows its question once more. */
     fun askSmoothAgain() {
         smoothDeclinedBy = null

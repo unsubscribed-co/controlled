@@ -173,6 +173,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             // Every TV and PC is on the home Wi-Fi: without this, Android sends us over mobile data while it rechecks a
             // Wi-Fi that just came back (measured on Juan's POCO, 2026-11-09), and the TV reads as off.
             cm.bindProcessToNetwork(network)
+            hid?.wifiBack()
             viewModelScope.launch {
                 on(Event.WifiBack)
                 if (visible && (status == Status.Connecting || status is Status.Waiting)) connect()
