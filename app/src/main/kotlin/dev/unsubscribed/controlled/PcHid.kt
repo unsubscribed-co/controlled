@@ -26,6 +26,19 @@ enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported 
 /** Smooth mode (docs/plans/pc-wifi.md): the same input over Wi-Fi to Controlled for PC, when that PC runs it. */
 enum class Smooth { Off, Pairing, On }
 
+/** How a try at smooth mode ended. */
+enum class SmoothEnd { NotFound, Unreachable, Declined, Ended }
+
+/**
+ * When to try smooth mode again after [end]; null: only when the person asks. A PC that said no (or didn't answer the
+ * code) isn't asked again by itself: it brought the same question back every 20 s (2026-11-10).
+ */
+fun smoothRetryMs(end: SmoothEnd): Long? = when (end) {
+    SmoothEnd.NotFound, SmoothEnd.Unreachable -> Hid.SMOOTH_RETRY_MS
+    SmoothEnd.Declined -> null
+    SmoothEnd.Ended -> 0L
+}
+
 /**
  * The phone as a Bluetooth keyboard + mouse + media keys (Android's HID device profile), so a PC needs nothing installed.
  * Registered only while a PC controller is on screen (plus the remote's grace); one computer at a time.
@@ -51,13 +64,16 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private var smoothRun = 0
     /** The PC smooth mode is searching for or connected to, so repeated starts don't stack searches. */
     private var smoothFor: String? = null
+    /** The PC (address) that didn't allow this phone: smooth mode waits for [askSmoothAgain]. Kept while the app runs. */
+    var smoothDeclinedBy by mutableStateOf<String?>(null)
+        private set
 
     /** Bluetooth or smooth mode: either way the PC takes input. */
     val connected get() = link == PcLink.Connected || smooth == Smooth.On
 
     /** Looks for Controlled for PC on this Wi-Fi under the PC's name; while it answers, input goes that way. */
     private fun startSmooth(address: String) {
-        if (smoothFor == address) return
+        if (smoothFor == address || smoothDeclinedBy == address) return
         smoothFor = address
         val run = ++smoothRun
         val name = runCatching { adapter?.getRemoteDevice(address)?.name }.getOrNull() ?: return log { "smooth: no name for $address" }.also { smoothFor = null }
@@ -65,24 +81,48 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
             val to = findSmoothPc(app, name)
             log { "smooth: looked for '$name', found $to" }
             val link = runCatching { SmoothLink(app) }.onFailure { log { "smooth: $it" } }.getOrNull()
+            var asked = false
             val ok = link != null && to != null && run == smoothRun && runCatching {
-                link.connect(to) { code -> handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
+                link.connect(to) { code -> asked = true; handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
             }.onFailure { log { "smooth: $it" } }.getOrDefault(false)
             handler.post { smoothCode = null }
             if (link == null || !ok || run != smoothRun) {
                 link?.close()
-                handler.post { if (run == smoothRun) { smooth = Smooth.Off; smoothFor = null; handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, Hid.SMOOTH_RETRY_MS) } }
+                // Asked and not allowed (a No, or nobody answered in time) is the person's answer; not found is the network's.
+                val end = if (to == null) SmoothEnd.NotFound else if (asked) SmoothEnd.Declined else SmoothEnd.Unreachable
+                log { "smooth: ended $end" }
+                handler.post { if (run == smoothRun) smoothEnded(address, run, end) }
                 return@Thread
             }
             handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On } }
             link.awaitClose()
+            log { "smooth: session closed" }
             handler.post {
                 if (wifi === link) { wifi = null; smooth = Smooth.Off }
                 link.close()
-                if (run == smoothRun) smoothFor = null
-                if (run == smoothRun && target == address) startSmooth(address)
+                if (run == smoothRun) smoothEnded(address, run, SmoothEnd.Ended)
             }
         }.start()
+    }
+
+    /** Back to Bluetooth after [end]; tries again when [smoothRetryMs] says, while this PC is still the one on screen. */
+    private fun smoothEnded(address: String, run: Int, end: SmoothEnd) {
+        smooth = Smooth.Off
+        smoothFor = null
+        if (end == SmoothEnd.Declined) smoothDeclinedBy = address
+        val wait = smoothRetryMs(end) ?: return
+        handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, wait)
+    }
+
+    /** The person asks for smooth mode again after the PC said no: the PC shows its question once more. */
+    fun askSmoothAgain() {
+        smoothDeclinedBy = null
+        target?.let(::startSmooth)
+    }
+
+    /** A send that fails means the link is gone (the PC quit, the Wi-Fi dropped): close it, so input goes back to Bluetooth. */
+    private fun smoothSend(w: SmoothLink, send: SmoothLink.() -> Unit) = io.post {
+        runCatching { w.send() }.onFailure { log { "smooth: send failed, back to Bluetooth: $it" }; w.close() }
     }
 
     private fun stopSmooth() {
@@ -226,7 +266,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private val drain: Runnable = Runnable { drain() }
 
     private fun send(id: Int, report: ByteArray) {
-        smoothLink()?.let { w -> io.post { runCatching { w.report(id, report) } }; return }
+        smoothLink()?.let { w -> smoothSend(w) { report(id, report) }; return }
         if (host != null && outbox.add(id, report)) drain()
     }
 
@@ -265,7 +305,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** One report per move, whatever its size (16-bit deltas), so a quick flick never arrives in pieces. */
     fun move(dx: Int, dy: Int) {
-        smoothLink()?.let { w -> io.post { runCatching { w.move(dx, dy) } }; return }
+        smoothLink()?.let { w -> smoothSend(w) { move(dx, dy) }; return }
         if (host != null && outbox.move(held, dx, dy)) drain()
     }
 
@@ -293,7 +333,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     /** Types [text] as the PC's [layout] reads keys; characters it can't type are skipped. */
     fun type(text: String) {
         // Smooth mode types the characters themselves: the PC's layout doesn't matter.
-        smoothLink()?.let { w -> io.post { runCatching { w.text(text) } }; return }
+        smoothLink()?.let { w -> smoothSend(w) { text(text) }; return }
         for (c in text) Keymap.strokes(c, layout)?.forEach { key(it.mods, it.key) }
     }
 

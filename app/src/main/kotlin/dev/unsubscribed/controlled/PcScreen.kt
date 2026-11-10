@@ -140,12 +140,16 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         }
         if (pc == null) AddPc(model) else Pad(hid)
     }
+    val declined = pc != null && hid.smoothDeclinedBy == pc.address
     if (offering) AlertDialog(
         onDismissRequest = { offering = false },
-        confirmButton = { TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) } },
+        confirmButton = {
+            if (declined) TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.askPcAgain) }
+            else TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) }
+        },
         dismissButton = { TextButton({ offering = false }) { Text(t.notNow) } },
         title = { Text(t.smoothOffer) },
-        text = { Text(t.smoothOfferBody) },
+        text = { Text(if (declined) t.smoothDeclinedBody else t.smoothOfferBody) },
     )
     // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
     hid.smoothCode?.let { code ->

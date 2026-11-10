@@ -59,6 +59,8 @@ interface Strings {
     val smoothOffer: String
     val smoothOfferBody: String
     val openOnPc: String
+    val smoothDeclinedBody: String
+    val askPcAgain: String
     val notNow: String
     val smoothPairTitle: String
     val smoothPairBody: String
@@ -276,6 +278,8 @@ object En : Strings {
     override val smoothOffer = "Smooth mode"
     override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: just click Install."
     override val openOnPc = "Open on the PC"
+    override val smoothDeclinedBody = "The PC didn't allow this phone, so it stays on Bluetooth. To use smooth mode, ask again and click Yes on the PC when it shows the same code as here."
+    override val askPcAgain = "Ask the PC again"
     override val notNow = "Not now"
     override val smoothPairTitle = "Allow this phone on the PC"
     override val smoothPairBody = "The PC is asking to allow this phone. Click Yes there if it shows this same code:"
@@ -486,6 +490,8 @@ object Es : Strings {
     override val smoothOffer = "Modo fluido"
     override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: solo haz clic en Instalar."
     override val openOnPc = "Abrir en el PC"
+    override val smoothDeclinedBody = "El PC no permitió este celular, así que sigue por Bluetooth. Para usar el modo fluido, pregunta de nuevo y haz clic en Sí en el PC cuando muestre el mismo código que aquí."
+    override val askPcAgain = "Preguntar de nuevo al PC"
     override val notNow = "Ahora no"
     override val smoothPairTitle = "Permite este celular en el PC"
     override val smoothPairBody = "El PC pide permitir este celular. Haz clic en Sí allá si muestra este mismo código:"
