@@ -68,8 +68,8 @@ class PressQueue<T>(private val max: Int = 5, private val maxAgeMs: Long = 1_000
 /** Waits between reconnect attempts while the app is on screen: fast at first, then every 5 s. */
 fun retryDelay(attempt: Int): Long = listOf(0L, 300L, 1_000L, 2_000L, 4_000L).getOrElse(attempt) { 5_000L }
 
-/** Look for the TV at a new address on the 3rd failed try, then about every 30 s: it may have been off at the last look. */
-fun searchNow(attempt: Int): Boolean = attempt == 2 || (attempt > 2 && (attempt - 2) % 6 == 0)
+/** Look for the TV at a new address on the 3rd failed try, then about every 15 s: it may have been off at the last look. */
+fun searchNow(attempt: Int): Boolean = attempt == 2 || (attempt > 2 && (attempt - 2) % 3 == 0)
 
 /**
  * The whole app's state. The socket lives while the app is on screen and for [GRACE_MS] after it leaves, so locking the
