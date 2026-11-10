@@ -30,11 +30,12 @@ enum class Smooth { Off, Pairing, On }
 enum class SmoothEnd { NotFound, Unreachable, Declined, Ended }
 
 /**
- * When to try smooth mode again after [end]; null: only when the person asks. A PC that said no (or didn't answer the
- * code) isn't asked again by itself: it brought the same question back every 20 s (2026-11-10).
+ * When to try smooth mode again after [end], the [misses]th not-found in a row; null: only when the person asks. A PC
+ * that said no (or didn't answer the code) isn't asked again by itself: it brought the same question back every 20 s.
+ * Not found: soon at first (Wi-Fi just back, the program just opened), then every [Hid.SMOOTH_RETRY_MS].
  */
-fun smoothRetryMs(end: SmoothEnd): Long? = when (end) {
-    SmoothEnd.NotFound, SmoothEnd.Unreachable -> Hid.SMOOTH_RETRY_MS
+fun smoothRetryMs(end: SmoothEnd, misses: Int): Long? = when (end) {
+    SmoothEnd.NotFound, SmoothEnd.Unreachable -> listOf(2_000L, 5_000L, 10_000L).getOrElse(misses) { Hid.SMOOTH_RETRY_MS }
     SmoothEnd.Declined -> null
     SmoothEnd.Ended -> 0L
 }
@@ -67,6 +68,8 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     /** The PC (address) that didn't allow this phone: smooth mode waits for [askSmoothAgain]. Kept while the app runs. */
     var smoothDeclinedBy by mutableStateOf<String?>(null)
         private set
+    /** Not-found tries in a row, for [smoothRetryMs]; back to 0 once connected or stopped. */
+    private var smoothMisses = 0
 
     /** Bluetooth or smooth mode: either way the PC takes input. */
     val connected get() = link == PcLink.Connected || smooth == Smooth.On
@@ -94,7 +97,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
                 handler.post { if (run == smoothRun) smoothEnded(address, run, end) }
                 return@Thread
             }
-            handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On } }
+            handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On; smoothMisses = 0 } }
             link.awaitClose()
             log { "smooth: session closed" }
             handler.post {
@@ -110,13 +113,17 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         smooth = Smooth.Off
         smoothFor = null
         if (end == SmoothEnd.Declined) smoothDeclinedBy = address
-        val wait = smoothRetryMs(end) ?: return
+        val wait = smoothRetryMs(end, smoothMisses) ?: return
+        if (end == SmoothEnd.NotFound || end == SmoothEnd.Unreachable) smoothMisses++
         handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, wait)
     }
 
     /** Wi-Fi is back: look for the PC program now, not at the next retry (up to 20 s later). Only while the PC is open. */
     fun wifiBack() {
-        handler.post { val t = target; if (hid != null && t != null && smooth == Smooth.Off) startSmooth(t) }
+        handler.post {
+            val t = target
+            if (hid != null && t != null && smooth == Smooth.Off) { smoothMisses = 0; startSmooth(t) }
+        }
     }
 
     /** The person asks for smooth mode again after the PC said no: the PC shows its question once more. */
@@ -133,6 +140,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private fun stopSmooth() {
         smoothRun++
         smoothFor = null
+        smoothMisses = 0
         wifi?.let { w -> io.post { w.close() } }
         wifi = null
         smooth = Smooth.Off

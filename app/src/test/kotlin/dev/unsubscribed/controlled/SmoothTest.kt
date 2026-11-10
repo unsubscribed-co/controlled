@@ -6,12 +6,13 @@ import org.junit.Test
 class SmoothTest {
     @Test fun aPcThatSaidNoIsNotAskedAgainByItself() {
         // 2026-11-10: declining on the PC brought the same question back every 20 s with a new code.
-        assertEquals(null, smoothRetryMs(SmoothEnd.Declined))
+        assertEquals(null, smoothRetryMs(SmoothEnd.Declined, 0))
     }
 
-    @Test fun aPcNotFoundYetIsLookedForAgainSoon() {
-        assertEquals(20_000L, smoothRetryMs(SmoothEnd.NotFound))
-        assertEquals(20_000L, smoothRetryMs(SmoothEnd.Unreachable))
+    @Test fun aPcNotFoundYetIsLookedForFastThenEvery20Seconds() {
+        // 2026-11-10: right after Wi-Fi came back mDNS found nothing, and the next look was 20 s later.
+        assertEquals(listOf(2_000L, 5_000L, 10_000L, 20_000L, 20_000L), (0..4).map { smoothRetryMs(SmoothEnd.NotFound, it) })
+        assertEquals(2_000L, smoothRetryMs(SmoothEnd.Unreachable, 0))
     }
 
     @Test fun thePcIsReachedOnItsIpv4Address() {
@@ -23,6 +24,6 @@ class SmoothTest {
     }
 
     @Test fun aSessionThatEndedReconnectsAtOnce() {
-        assertEquals(0L, smoothRetryMs(SmoothEnd.Ended))
+        assertEquals(0L, smoothRetryMs(SmoothEnd.Ended, 0))
     }
 }
