@@ -1,8 +1,8 @@
 <en-US>
-- Smooth mode for your PC is more reliable: if the PC's program closes or your Wi-Fi drops, control goes back to Bluetooth at once, and smooth mode comes back by itself within seconds.
-- If you click No on the PC, the phone won't ask again by itself; tap Smooth mode to ask again when you want.
+- PC: if another remote app on your phone is using it as a keyboard, Controlled now says so instead of saying the phone can't.
+- PC: new "Fix keyboard and mouse" in the PC's menu, for when keys repeat or the pointer acts strange.
 </en-US>
 <es-419>
-- El modo fluido para tu PC es más confiable: si se cierra el programa del PC o se cae el Wi-Fi, el control pasa al Bluetooth al instante, y el modo fluido vuelve solo en segundos.
-- Si haces clic en No en el PC, el celular no vuelve a preguntar solo; toca Modo fluido para preguntar de nuevo cuando quieras.
+- PC: si otra app de control remoto en tu celular lo está usando como teclado, Controlled ahora lo dice en vez de decir que el celular no puede.
+- PC: nuevo "Arreglar teclado y mouse" en el menú del PC, para cuando las teclas se repiten o el puntero se comporta raro.
 </es-419>
