@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = remoteVolumeKey(keyCode) || super.onKeyUp(keyCode, event)
 
     private fun remoteVolumeKey(keyCode: Int) = (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
-        (model.screen == Screen.Remote && model.link == Link.Connected || model.screen == Screen.Pc && model.hid?.connected == true)
+        (model.screen == Screen.Remote && model.isConnected || model.screen == Screen.Pc && model.hid?.connected == true)
 
     private fun openAppSettings() {
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

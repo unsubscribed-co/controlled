@@ -85,7 +85,7 @@ fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
     var editingKey by remember { mutableStateOf(false) }
     val askBluetooth = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     // Keys stay live while reconnecting: presses queue and go out the moment the socket is back.
-    val enabled = model.link != Link.CertificateChanged && model.link != Link.NoWifi
+    val enabled = model.status !is Status.Refused && model.status != Status.NoWifi
 
     // The TV's own keyboard came up: open Type, and close it again when the TV's field lets go.
     LaunchedEffect(model.tvKeyboard) {
@@ -95,7 +95,7 @@ fun RemoteScreen(model: RemoteModel, switch: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Header(model, tv, switch, onRename = { renaming = true }, onBleKey = { editingKey = true })
-            if (model.link == Link.CertificateChanged) CertificateNotice(model.forgotten, if (model.forgotten) model::repair else model::forget)
+            (model.status as? Status.Refused)?.let { CertificateNotice(it.forgotten, if (it.forgotten) model::repair else model::forget) }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val width = maxWidth
                 val height = maxHeight
@@ -157,14 +157,14 @@ private fun Header(model: RemoteModel, tv: PairedTv, switch: () -> Unit, onRenam
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
-    val live = model.link == Link.Connected && !model.asleep
+    val live = model.isConnected && !model.asleep
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             ControllerTitle(tv.name, switch)
             StatusLine(model, tv)
         }
         Key(R.drawable.sym_power_settings_new, if (live) t.powerOff else t.powerOn, size = 48.dp, accent = !live,
-            enabled = model.link != Link.CertificateChanged && model.link != Link.NoWifi) {
+            enabled = model.status !is Status.Refused && model.status != Status.NoWifi) {
             if (live) model.powerOff() else model.powerOn()
         }
         Box {
@@ -189,29 +189,36 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
     val t = LocalStrings.current
     val colors = MaterialTheme.colorScheme
     var slow by remember { mutableStateOf(false) }
-    LaunchedEffect(model.link) {
+    val status = model.status
+    // Restart the 400 ms wait only when the kind of state changes, not on every detail (a search starting, standby).
+    LaunchedEffect(status::class) {
         slow = false
         delay(400)
         slow = true
     }
-    // Connected to a TV in standby (Quick Start+ keeps its socket open) reads as off, with Turn on a tap away.
-    val sleeping = model.link == Link.Connected && model.asleep
-    val text = when (model.link) {
-        Link.Connected -> if (sleeping) t.tvOff else model.foregroundName()?.let { t.nowOn(it) }
-        Link.Connecting -> if (slow) t.connecting else null
-        Link.Waking -> t.turningOn
+    val text = when (status) {
+        is Status.Connected -> if (status.asleep) t.tvOff else model.foregroundName()?.let { t.nowOn(it) }
+        Status.Connecting -> if (slow) t.connecting else null
+        Status.Waking -> t.turningOn
         // A Google TV answers even in standby, so not reaching one is almost always the network.
-        Link.Off -> if (model.refinding) t.lookingForTv else if (model.vpn) t.vpnNote else if (tv.brand == Brand.GoogleTv) t.gtvUnreachable else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.waiting else t.tvOffNoPower
-        Link.NoWifi -> t.noWifi
-        Link.CertificateChanged -> null
+        is Status.Waiting -> when {
+            status.searching -> t.lookingForTv
+            model.vpn -> t.vpnNote
+            tv.brand == Brand.GoogleTv -> t.gtvUnreachable
+            status.why == Why.WakeFailed -> t.wakeHint
+            tv.macs.isNotEmpty() -> t.waiting
+            else -> t.tvOffNoPower
+        }
+        Status.NoWifi -> t.noWifi
+        is Status.Refused -> null
     }
     val tap: (() -> Unit)? = when {
-        sleeping -> model::powerOn
-        model.link == Link.Off -> if (tv.macs.isNotEmpty()) model::powerOn else model::connect
+        status is Status.Connected && status.asleep -> model::powerOn
+        status is Status.Waiting -> if (tv.macs.isNotEmpty()) model::powerOn else model::connect
         else -> null
     }
-    // Off still pulses: the app keeps trying while it's on screen, so it never reads as given up.
-    val breathing = model.link == Link.Waking || model.link == Link.Off || (model.link == Link.Connecting && slow)
+    // Waiting still pulses: the app keeps trying while it's on screen, so it never reads as given up.
+    val breathing = status == Status.Waking || status is Status.Waiting || (status == Status.Connecting && slow)
     val pulse = if (breathing && !reducedMotion()) {
         rememberInfiniteTransition(label = "status").animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "dot").value
     } else 1f
@@ -222,11 +229,11 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val dot = Modifier.size(8.dp).alpha(pulse).clip(CircleShape)
-        when (model.link) {
-            Link.Connected -> if (sleeping) Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape)) else Box(dot.background(colors.primary))
-            Link.Connecting, Link.Waking -> Box(dot.background(colors.primary))
-            Link.Off, Link.NoWifi -> Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
-            Link.CertificateChanged -> Box(dot.border(1.5.dp, colors.error, CircleShape))
+        when (status) {
+            is Status.Connected -> if (status.asleep) Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape)) else Box(dot.background(colors.primary))
+            Status.Connecting, Status.Waking -> Box(dot.background(colors.primary))
+            is Status.Waiting, Status.NoWifi -> Box(dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
+            is Status.Refused -> Box(dot.border(1.5.dp, colors.error, CircleShape))
         }
         text?.let {
             Spacer(Modifier.width(8.dp))

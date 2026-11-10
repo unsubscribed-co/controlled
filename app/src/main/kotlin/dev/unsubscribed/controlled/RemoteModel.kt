@@ -44,9 +44,6 @@ sealed interface Screen {
     data object Pc : Screen
 }
 
-/** The remote's link to the paired TV. */
-enum class Link { Connecting, Connected, Waking, Off, NoWifi, CertificateChanged }
-
 /** Why pairing didn't happen, for the Find screen. */
 enum class FindError { Unreachable, Rejected, NoAnswer }
 
@@ -111,8 +108,17 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun layoutAsked() {
         askLayout = false
     }
-    var link by mutableStateOf(Link.Connecting)
+    /** The link to the TV: changed only through [next] (Connection.kt), so it can't contradict itself. */
+    var status by mutableStateOf<Status>(Status.Connecting)
         private set
+
+    private fun on(e: Event) {
+        val was = status
+        status = next(was, e)
+        if (status != was) log { "status: $was -> $status ($e)" }
+    }
+
+    val isConnected get() = status is Status.Connected
     var volume by mutableStateOf<Int?>(null)
         private set
     var muted by mutableStateOf(false)
@@ -126,14 +132,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      */
     var powerState by mutableStateOf<String?>(null)
         private set
-    /** The last Turn on timed out: the TV likely ignores Wake-on-LAN after a while off unless its setting is on. */
-    var wakeFailed by mutableStateOf(false)
-        private set
-    /** The first look for the TV at a new address is running: the status says so (later ones only pulse the dot). */
-    var refinding by mutableStateOf(false)
-        private set
     /** Connected, but the TV is in standby or its screen is off: the remote offers Turn on. */
-    val asleep get() = powerState in ASLEEP
+    val asleep get() = (status as? Status.Connected)?.asleep == true
     /** The TV's own keyboard is up (a text field has focus there): the Type sheet opens by itself. */
     var tvKeyboard by mutableStateOf(false)
         private set
@@ -151,9 +151,6 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     val isGtv get() = tv?.brand == Brand.GoogleTv
     /** The code typed for a Google TV isn't the one on its screen. */
     var codeError by mutableStateOf(false)
-        private set
-    /** The Google TV refused this phone's certificate: it was reset or its remotes were removed. Shown with Pair again. */
-    var forgotten by mutableStateOf(false)
         private set
 
     private var client: TvClient? = null
@@ -173,7 +170,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             // Every TV and PC is on the home Wi-Fi: without this, Android sends us over mobile data while it rechecks a
             // Wi-Fi that just came back (measured on Juan's POCO, 2026-11-09), and the TV reads as off.
             cm.bindProcessToNetwork(network)
-            viewModelScope.launch { if (visible && (link == Link.NoWifi || link == Link.Off)) connect() }
+            viewModelScope.launch {
+                on(Event.WifiBack)
+                if (visible && (status == Status.Connecting || status is Status.Waiting)) connect()
+            }
         }
 
         override fun onLost(network: Network) {
@@ -182,7 +182,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                     cm.bindProcessToNetwork(null)
                     session?.cancel()
                     disconnect()
-                    link = Link.NoWifi
+                    on(Event.WifiLost)
                 }
             }
         }
@@ -208,7 +208,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         if (screen == Screen.Find) return search()
         if (tv == null) return
         val c = client
-        if (c != null && link == Link.Connected) viewModelScope.launch {
+        if (c != null && isConnected) viewModelScope.launch {
             // Android may have frozen the process in the background: a socket that doesn't answer in 700 ms is gone.
             val alive = withTimeoutOrNull(700) { runCatching { c.request("audio/getVolume") }.isSuccess } == true
             log { "resume probe: alive=$alive" }
@@ -225,7 +225,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             delay(GRACE_MS)
             session?.cancel()
             disconnect()
-            link = Link.Connecting
+            on(Event.Reset)
             hid?.stop()
         }
     }
@@ -265,6 +265,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 save(paired)
                 screen = Screen.Remote
                 run(c)
+                if (visible) connect()
             } catch (e: TvException) {
                 c.close()
                 findError = when (e.kind) {
@@ -339,8 +340,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         session?.cancel()
         disconnect()
         search?.cancel()
-        link = Link.Connecting
-        forgotten = false
+        on(Event.Reset)
         if (controller !is PairedPc) hid?.stop()
         if (controller !is PairedTv || controller.id != tv?.id) {
             apps.clear()
@@ -465,82 +465,87 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Connects to the paired TV and keeps it connected while the app is on screen: after a drop or a failed attempt it
-     * tries again on [retryDelay]'s schedule, and once looks for the TV at a new address (a DHCP change).
+     * tries again on [retryDelay]'s schedule, and looks for the TV at a new address ([searchNow]: a DHCP or router change).
      */
-    fun connect() {
+    fun connect() = keepConnected(wakeUntil = 0L)
+
+    /**
+     * The one connection loop, for both brands. Until [wakeUntil] (a Turn on) it tries every second and resends the magic
+     * packet every 10 s (measured on Juan's TV: the session was ready 4.6 s after the packet); a wake that never connects
+     * by then is reported as failed. The status only changes through [next].
+     */
+    private fun keepConnected(wakeUntil: Long) {
         val paired = tv ?: return
-        if (!hasWifi()) {
-            link = Link.NoWifi
-            return
-        }
+        if (!hasWifi()) return on(Event.WifiLost)
         session?.cancel()
         disconnect()
-        if (paired.brand == Brand.GoogleTv) {
-            session = viewModelScope.launch { gtvLoop() }
-            return
-        }
+        if (wakeUntil > 0) on(Event.WakeStarted)
+        if (paired.brand == Brand.LG && paired.macs.isEmpty()) log { "no MACs stored: power on unavailable" }
         session = viewModelScope.launch {
             var attempt = 0
-            if (link != Link.Off) link = Link.Connecting
+            var lastPacket = 0L
             while (true) {
                 val current = tv ?: return@launch
-                val c = TvClient(current.ip, http)
+                val waking = System.currentTimeMillis() < wakeUntil
+                if (waking && System.currentTimeMillis() - lastPacket >= 10_000) {
+                    WakeOnLan.send(getApplication(), current.macs, current.ip)
+                    lastPacket = System.currentTimeMillis()
+                }
                 try {
-                    c.connect(current.clientKey, current.pin)
+                    session(current) // returns when a live session ends
                     attempt = 0
-                    run(c)
                 } catch (e: TvException) {
-                    c.close()
-                    if (e.kind == TvException.Kind.CertificateChanged) {
-                        link = Link.CertificateChanged
-                        return@launch
-                    }
-                    if (attempt >= 1) link = Link.Off
-                    if (searchNow(attempt) && lookAgain(current, attempt)) continue
+                    log { "connect failed: ${e.kind} $e cause=${e.cause}" }
+                    // A Google TV that refuses our certificate was reset or dropped this phone: pair again.
+                    val forgotten = current.brand == Brand.GoogleTv && e.kind == TvException.Kind.Rejected
+                    if (e.kind == TvException.Kind.CertificateChanged || forgotten) return@launch on(Event.Refused(forgotten))
+                    if (!waking) on(Event.WakeTimedOut)
+                    if (attempt >= 1) on(Event.Failed)
+                    if (!waking && searchNow(attempt) && lookAgain(current, attempt)) continue
                 }
                 if (!visible) return@launch
-                delay(retryDelay(attempt++))
+                delay(if (waking) 1_000 else retryDelay(attempt++))
             }
         }
-        if (paired.macs.isEmpty()) log { "no MACs stored: power on unavailable" }
     }
 
-    /** [connect] for a Google TV: the same retry schedule and the same one look for a new address. */
-    private suspend fun gtvLoop() {
-        var attempt = 0
-        if (link != Link.Off) link = Link.Connecting
-        while (true) {
-            val current = tv ?: return
-            val g = GtvClient(current.ip, current.pin ?: return)
+    /** One session with the TV, by brand: throws [TvException] if it can't connect, returns when a live one ends. */
+    private suspend fun session(current: PairedTv) {
+        if (current.brand == Brand.GoogleTv) {
+            val g = GtvClient(current.ip, current.pin ?: throw TvException(TvException.Kind.Rejected, "No pairing code stored"))
             try {
                 g.open()
-                attempt = 0
-                runGtv(g)
             } catch (e: TvException) {
                 g.close()
-                log { "gtv connect failed: ${e.kind} $e cause=${e.cause}" }
-                if (e.kind == TvException.Kind.CertificateChanged || e.kind == TvException.Kind.Rejected) {
-                    forgotten = e.kind == TvException.Kind.Rejected
-                    link = Link.CertificateChanged
-                    return
-                }
-                if (attempt >= 1) link = Link.Off
-                if (searchNow(attempt) && lookAgain(current, attempt)) continue
+                throw e
             }
-            if (!visible) return
-            delay(retryDelay(attempt++))
+            return runGtv(g)
         }
+        val c = TvClient(current.ip, http)
+        try {
+            c.connect(current.clientKey, current.pin)
+        } catch (e: TvException) {
+            c.close()
+            throw e
+        }
+        run(c)
     }
 
     /** Connected to a Google TV: its fixed app list, then its state until the socket closes. */
     private suspend fun runGtv(g: GtvClient) {
         gtv = g
-        link = Link.Connected
+        on(Event.Connected)
         apps.clear()
         apps += Gtv.APPS.map { TvApp(it.id, it.title, null) }
         val watchers = listOf(
             // Off reads as LG's standby, so the header and status line offer Turn on the same way.
-            viewModelScope.launch { g.on.collect { log { "gtv on=$it" }; powerState = if (it == false) "Active Standby" else null } },
+            viewModelScope.launch {
+                g.on.collect {
+                    log { "gtv on=$it" }
+                    powerState = if (it == false) "Active Standby" else null
+                    on(Event.Asleep(it == false))
+                }
+            },
             viewModelScope.launch {
                 g.app.collect { id ->
                     foreground = id
@@ -556,21 +561,22 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             watchers.forEach { it.cancel() }
             if (gtv === g) {
                 disconnect()
-                if (link == Link.Connected) link = Link.Connecting
+                on(Event.Ended)
             }
         }
     }
 
-    /** The TV may have a new address: try every TV of its brand the search finds with our key; the one that accepts it is ours. */
+    /** The TV may have a new address: the first look says so on screen, later ones (every ~15 s) quietly. */
     private suspend fun lookAgain(current: PairedTv, attempt: Int): Boolean {
-        refinding = attempt == 2
+        on(Event.Searching(shown = attempt == 2))
         try {
             return refind(current)
         } finally {
-            refinding = false
+            on(Event.SearchDone)
         }
     }
 
+    /** Tries every TV of its brand the search finds with our key; the one that accepts it is ours. */
     private suspend fun refind(current: PairedTv): Boolean {
         val gtv = current.brand == Brand.GoogleTv
         // The mDNS search never ends by itself: keep what it found when the time is up.
@@ -595,20 +601,17 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
-    /**
-     * Power on: the magic packet, then a connect attempt every second and the packet again every 10 s, for about 20 s
-     * (measured on Juan's TV: the session was ready 4.6 s after the packet). Then the normal reconnect loop takes over.
-     */
+    /** Turn on: the wake shots (Bluetooth, IR, Wake-on-LAN), then [keepConnected] tries every second for [WAKE_MS]. */
     fun powerOn() {
         val paired = tv ?: return
         // shortcut: assumes a Google TV in standby keeps its remote port open, so Power there wakes it; not measured
         // yet. Off the network it only reconnects (no Wake-on-LAN or IR for these yet).
-        if (paired.brand == Brand.GoogleTv) return if (link == Link.Connected) gtvKey(Gtv.POWER) else connect()
+        if (paired.brand == Brand.GoogleTv) return if (isConnected) gtvKey(Gtv.POWER) else connect()
         bleWake(paired)
         irWake(paired)
-        if (link == Link.Waking) return // Already waking: another press only fires the IR and Bluetooth shots again.
+        if (status == Status.Waking) return // Already waking: another press only fires the IR and Bluetooth shots again.
         val c = client
-        if (c != null && link == Link.Connected) {
+        if (c != null && isConnected) {
             // The socket is up but the TV is in standby: wake it over SSAP, as aiowebostv does; the packet is a backup.
             viewModelScope.launch {
                 WakeOnLan.send(getApplication(), paired.macs, paired.ip)
@@ -617,38 +620,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        session?.cancel()
-        disconnect()
-        session = viewModelScope.launch {
-            link = Link.Waking
-            wakeFailed = false
-            val started = System.currentTimeMillis()
-            var lastPacket = 0L
-            var woke = false
-            while (System.currentTimeMillis() - started < 20_000) {
-                if (System.currentTimeMillis() - lastPacket >= 10_000) {
-                    WakeOnLan.send(getApplication(), paired.macs, paired.ip)
-                    lastPacket = System.currentTimeMillis()
-                }
-                val c = TvClient(paired.ip, http)
-                try {
-                    c.connect(paired.clientKey, paired.pin)
-                    woke = true
-                    run(c) // returns when the session ends, e.g. the TV turned off later: that's not a failed wake
-                    break
-                } catch (e: TvException) {
-                    c.close()
-                    if (e.kind == TvException.Kind.CertificateChanged) {
-                        link = Link.CertificateChanged
-                        return@launch
-                    }
-                }
-                delay(1_000)
-            }
-            link = Link.Off
-            wakeFailed = !woke
-            if (visible) connect()
-        }
+        keepConnected(wakeUntil = System.currentTimeMillis() + WAKE_MS)
     }
 
     /**
@@ -676,8 +648,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** Connected: flush fresh queued presses, open the pointer socket, read state, then wait until the socket closes. */
     private suspend fun run(c: TvClient) {
         client = c
-        link = Link.Connected
-        wakeFailed = false
+        on(Event.Connected)
         val p = runCatching { c.pointer() }.getOrNull()
         pointer = p
         queue.drain(System.currentTimeMillis()).forEach { it(c, p) }
@@ -702,7 +673,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 runCatching {
                     c.subscribe("com.webos.service.tvpower/power/getPowerState").collect { payload ->
                         log { "power: $payload" }
-                        payload.string("state")?.let { powerState = it }
+                        payload.string("state")?.let {
+                            powerState = it
+                            on(Event.Asleep(it in ASLEEP))
+                        }
                     }
                 }
             },
@@ -724,7 +698,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             // A newer session may already own the link: only the current one reports it closed.
             if (client === c) {
                 disconnect()
-                if (link == Link.Connected) link = Link.Connecting
+                on(Event.Ended)
             }
         }
     }
@@ -784,16 +758,16 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
     private fun press(action: Press) {
         val c = client
-        if (c != null && link == Link.Connected) return action(c, pointer)
+        if (c != null && isConnected) return action(c, pointer)
         queue.add(System.currentTimeMillis(), action)
-        if (link == Link.Off || link == Link.Connected) connect()
+        if (status is Status.Waiting || isConnected) connect()
     }
 
     /** A Google TV's press: sent when connected, else it starts a reconnect (no queue: shortcut, add one if missed). */
     private fun gtvPress(action: (GtvClient) -> Unit) {
         val g = gtv
-        if (g != null && link == Link.Connected) return action(g)
-        if (link == Link.Off || link == Link.Connected) connect()
+        if (g != null && isConnected) return action(g)
+        if (status is Status.Waiting || isConnected) connect()
     }
 
     private fun gtvKey(code: Int) = gtvPress { it.key(code) }
@@ -837,7 +811,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         if (isGtv) return Regex("""https?://\S+""").find(text)?.value?.let { link -> gtvPress { it.launch(link) }; true } ?: false
         pendingShare = shareLaunch(text) ?: return false
         val c = client
-        if (c != null && link == Link.Connected) sendShare(c) else if (link == Link.Off || link == Link.Connected) connect()
+        if (c != null && isConnected) sendShare(c) else if (status is Status.Waiting || isConnected) connect()
         return true
     }
 
@@ -892,6 +866,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
         /** How long the socket outlives the screen: covers locking the phone and a quick app switch. */
         const val GRACE_MS = 30_000L
+        /** How long Turn on keeps trying every second before it reports the wake as failed. */
+        const val WAKE_MS = 20_000L
     }
 }
 
