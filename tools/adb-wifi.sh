@@ -29,7 +29,10 @@ for net in $(powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IP
     Start-Sleep -Milliseconds 1500
     \$jobs | Where-Object { \$_.t.IsCompleted -and -not \$_.t.IsFaulted -and \$_.c.Connected } | ForEach-Object { \$_.ip }
     \$jobs | ForEach-Object { \$_.c.Dispose() }" | tr -d '\r'); do
-    if "$adb" connect "$ip:5555" | grep -q connected; then echo "$ip:5555"; exit 0; fi
+    "$adb" connect "$ip:5555" | grep -q connected || continue
+    # The onn and other TVs answer on 5555 too: keep looking until a phone answers.
+    "$adb" -s "$ip:5555" shell getprop ro.build.characteristics | grep -q tv && continue
+    echo "$ip:5555"; exit 0
   done
 done
 echo "Phone not found: plug the cable in once and run this again" >&2
