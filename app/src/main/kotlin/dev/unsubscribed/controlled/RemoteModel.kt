@@ -129,6 +129,9 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** The last Turn on timed out: the TV likely ignores Wake-on-LAN after a while off unless its setting is on. */
     var wakeFailed by mutableStateOf(false)
         private set
+    /** The first look for the TV at a new address is running: the status says so (later ones only pulse the dot). */
+    var refinding by mutableStateOf(false)
+        private set
     /** Connected, but the TV is in standby or its screen is off: the remote offers Turn on. */
     val asleep get() = powerState in ASLEEP
     /** The TV's own keyboard is up (a text field has focus there): the Type sheet opens by itself. */
@@ -493,7 +496,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     if (attempt >= 1) link = Link.Off
-                    if (searchNow(attempt) && refind(current)) continue
+                    if (searchNow(attempt) && lookAgain(current, attempt)) continue
                 }
                 if (!visible) return@launch
                 delay(retryDelay(attempt++))
@@ -522,7 +525,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                     return
                 }
                 if (attempt >= 1) link = Link.Off
-                if (searchNow(attempt) && refind(current)) continue
+                if (searchNow(attempt) && lookAgain(current, attempt)) continue
             }
             if (!visible) return
             delay(retryDelay(attempt++))
@@ -559,6 +562,15 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The TV may have a new address: try every TV of its brand the search finds with our key; the one that accepts it is ours. */
+    private suspend fun lookAgain(current: PairedTv, attempt: Int): Boolean {
+        refinding = attempt == 2
+        try {
+            return refind(current)
+        } finally {
+            refinding = false
+        }
+    }
+
     private suspend fun refind(current: PairedTv): Boolean {
         val gtv = current.brand == Brand.GoogleTv
         // The mDNS search never ends by itself: keep what it found when the time is up.

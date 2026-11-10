@@ -42,6 +42,7 @@ interface Strings {
     val turningOn: String
     val tvOff: String
     val tvOffNoPower: String
+    val lookingForTv: String
     val gtvUnreachable: String
     val noWifi: String
     /** Turn on timed out: where LG keeps the setting that lets the TV wake from the phone. */
@@ -259,8 +260,9 @@ object En : Strings {
 
     override val connecting = "Connecting…"
     override val turningOn = "Turning on…"
-    override val tvOff = "TV is off. Tap to turn on"
-    override val tvOffNoPower = "TV is off or out of reach. Tap to retry"
+    override val tvOff = "TV is off. Still trying, or tap to turn on"
+    override val tvOffNoPower = "TV is off or out of reach. Still trying, or tap to retry now"
+    override val lookingForTv = "Looking for your TV on this Wi-Fi…"
     override val gtvUnreachable = "Can't reach the TV. Check it's on this phone's Wi-Fi; if it is, on the TV forget the Wi-Fi network and join it again. Tap to retry"
     override val noWifi = "No Wi-Fi. Connect to your home Wi-Fi"
     override val wakeHint = "The TV didn't wake. On the TV, turn on Settings > General > Devices > Mobile TV On > Turn on via Wi-Fi"
@@ -467,8 +469,9 @@ object Es : Strings {
 
     override val connecting = "Conectando…"
     override val turningOn = "Encendiendo…"
-    override val tvOff = "El TV está apagado. Toca para encender"
-    override val tvOffNoPower = "El TV está apagado o fuera de alcance. Toca para reintentar"
+    override val tvOff = "El TV está apagado. Sigo intentando, o toca para encender"
+    override val tvOffNoPower = "El TV está apagado o fuera de alcance. Sigo intentando, o toca para reintentar ya"
+    override val lookingForTv = "Buscando tu TV en este Wi-Fi…"
     override val gtvUnreachable = "No llegamos al TV. Revisa que esté en el mismo Wi-Fi que este celular; si lo está, en el TV olvida la red Wi-Fi y vuelve a unirte. Toca para reintentar"
     override val noWifi = "Sin Wi-Fi. Conéctate al Wi-Fi de tu casa"
     override val wakeHint = "El TV no encendió. En el TV, activa Configuración > General > Dispositivos > Encender TV con móvil > Encender por Wi-Fi"

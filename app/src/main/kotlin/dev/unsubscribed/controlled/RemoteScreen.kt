@@ -201,7 +201,7 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         Link.Connecting -> if (slow) t.connecting else null
         Link.Waking -> t.turningOn
         // A Google TV answers even in standby, so not reaching one is almost always the network.
-        Link.Off -> if (model.vpn) t.vpnNote else if (tv.brand == Brand.GoogleTv) t.gtvUnreachable else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
+        Link.Off -> if (model.refinding) t.lookingForTv else if (model.vpn) t.vpnNote else if (tv.brand == Brand.GoogleTv) t.gtvUnreachable else if (model.wakeFailed) t.wakeHint else if (tv.macs.isNotEmpty()) t.tvOff else t.tvOffNoPower
         Link.NoWifi -> t.noWifi
         Link.CertificateChanged -> null
     }
@@ -210,7 +210,8 @@ private fun StatusLine(model: RemoteModel, tv: PairedTv) {
         model.link == Link.Off -> if (tv.macs.isNotEmpty()) model::powerOn else model::connect
         else -> null
     }
-    val breathing = model.link == Link.Waking || (model.link == Link.Connecting && slow)
+    // Off still pulses: the app keeps trying while it's on screen, so it never reads as given up.
+    val breathing = model.link == Link.Waking || model.link == Link.Off || (model.link == Link.Connecting && slow)
     val pulse = if (breathing && !reducedMotion()) {
         rememberInfiniteTransition(label = "status").animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "dot").value
     } else 1f
