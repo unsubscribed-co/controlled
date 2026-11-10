@@ -1,10 +1,8 @@
 <en-US>
-- Fix: the app could close when your phone's Wi-Fi dropped. It now shows "No Wi-Fi" and reconnects by itself when Wi-Fi is back.
-- The status line is always right: no more "The TV didn't wake" after turning the TV off, and no "can't reach" while connected.
-- Turn on waits a little longer for TVs that are slow to wake.
+- Smooth mode for your PC is more reliable: if the PC's program closes or your Wi-Fi drops, control goes back to Bluetooth at once, and smooth mode comes back by itself within seconds.
+- If you click No on the PC, the phone won't ask again by itself; tap Smooth mode to ask again when you want.
 </en-US>
 <es-419>
-- Arreglo: la app podía cerrarse cuando se caía el Wi-Fi del celular. Ahora muestra "Sin Wi-Fi" y se reconecta sola cuando vuelve.
-- El estado siempre es correcto: ya no dice "El TV no encendió" después de apagarlo, ni "no se puede conectar" estando conectado.
-- Encender espera un poco más a los TV que tardan en despertar.
+- El modo fluido para tu PC es más confiable: si se cierra el programa del PC o se cae el Wi-Fi, el control pasa al Bluetooth al instante, y el modo fluido vuelve solo en segundos.
+- Si haces clic en No en el PC, el celular no vuelve a preguntar solo; toca Modo fluido para preguntar de nuevo cuando quieras.
 </es-419>
