@@ -21,4 +21,8 @@ class ReconnectTest {
     @Test fun retriesStartFastThenSettle() {
         assertEquals(listOf(0L, 300L, 1_000L, 2_000L, 4_000L, 5_000L, 5_000L), (0..6).map(::retryDelay))
     }
+
+    @Test fun searchesAgainAboutEvery30Seconds() {
+        assertEquals(listOf(2, 8, 14, 20), (0..20).filter(::searchNow))
+    }
 }

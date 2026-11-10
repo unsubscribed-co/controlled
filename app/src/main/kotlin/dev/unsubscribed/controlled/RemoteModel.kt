@@ -68,6 +68,9 @@ class PressQueue<T>(private val max: Int = 5, private val maxAgeMs: Long = 1_000
 /** Waits between reconnect attempts while the app is on screen: fast at first, then every 5 s. */
 fun retryDelay(attempt: Int): Long = listOf(0L, 300L, 1_000L, 2_000L, 4_000L).getOrElse(attempt) { 5_000L }
 
+/** Look for the TV at a new address on the 3rd failed try, then about every 30 s: it may have been off at the last look. */
+fun searchNow(attempt: Int): Boolean = attempt == 2 || (attempt > 2 && (attempt - 2) % 6 == 0)
+
 /**
  * The whole app's state. The socket lives while the app is on screen and for [GRACE_MS] after it leaves, so locking the
  * phone or a quick app switch comes back to a live socket; after that it closes: no service, no background work.
@@ -475,7 +478,6 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         }
         session = viewModelScope.launch {
             var attempt = 0
-            var searched = false
             if (link != Link.Off) link = Link.Connecting
             while (true) {
                 val current = tv ?: return@launch
@@ -491,10 +493,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     if (attempt >= 1) link = Link.Off
-                    if (attempt >= 2 && !searched) {
-                        searched = true
-                        if (refind(current)) continue
-                    }
+                    if (searchNow(attempt) && refind(current)) continue
                 }
                 if (!visible) return@launch
                 delay(retryDelay(attempt++))
@@ -506,7 +505,6 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** [connect] for a Google TV: the same retry schedule and the same one look for a new address. */
     private suspend fun gtvLoop() {
         var attempt = 0
-        var searched = false
         if (link != Link.Off) link = Link.Connecting
         while (true) {
             val current = tv ?: return
@@ -524,10 +522,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                     return
                 }
                 if (attempt >= 1) link = Link.Off
-                if (attempt >= 2 && !searched) {
-                    searched = true
-                    if (refind(current)) continue
-                }
+                if (searchNow(attempt) && refind(current)) continue
             }
             if (!visible) return
             delay(retryDelay(attempt++))
