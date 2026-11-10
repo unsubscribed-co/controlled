@@ -18,9 +18,12 @@ if [ -n "$usb" ]; then
   exit 0
 fi
 
-# Already connected over Wi-Fi?
-known=$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /:5555$/ { print $1; exit }')
-[ -n "$known" ] && { echo "$known"; exit 0; }
+istv() { "$adb" -s "$1" shell getprop ro.build.characteristics | grep -q tv; }
+
+# Already connected over Wi-Fi? (The onn and other TVs answer on 5555 too: only a phone counts.)
+for known in $("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /:5555$/ { print $1 }'); do
+  istv "$known" || { echo "$known"; exit 0; }
+done
 
 # Scan this PC's home subnets for port 5555 (about 2 s).
 for net in $(powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -like '192.168.*' -or \$_.IPAddress -like '10.*' }).IPAddress" | tr -d '\r' | sed -E 's/\.[0-9]+$//' | sort -u); do
@@ -31,7 +34,7 @@ for net in $(powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IP
     \$jobs | ForEach-Object { \$_.c.Dispose() }" | tr -d '\r'); do
     "$adb" connect "$ip:5555" | grep -q connected || continue
     # The onn and other TVs answer on 5555 too: keep looking until a phone answers.
-    "$adb" -s "$ip:5555" shell getprop ro.build.characteristics | grep -q tv && continue
+    istv "$ip:5555" && continue
     echo "$ip:5555"; exit 0
   done
 done
