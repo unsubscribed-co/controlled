@@ -866,8 +866,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
         /** How long the socket outlives the screen: covers locking the phone and a quick app switch. */
         const val GRACE_MS = 30_000L
-        /** How long Turn on keeps trying every second before it reports the wake as failed. */
-        const val WAKE_MS = 20_000L
+        /** How long Turn on keeps trying before it reports the wake as failed: an IR wake took 19 s on Juan's LG (2026-11-10). */
+        const val WAKE_MS = 30_000L
     }
 }
 
