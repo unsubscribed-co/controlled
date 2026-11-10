@@ -3,9 +3,52 @@
 //! the status and offers Pause or Resume, Open (the window) and Quit. Runs the Windows message loop on the main thread.
 use crate::state::Shared;
 use crate::ui::strings;
+use std::cell::RefCell;
 use std::sync::Arc;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{Icon, MouseButton, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{Icon, MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+thread_local! {
+    /// The icon lives on the main thread, where the window procedure below runs too.
+    static TRAY: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
+}
+
+/// Takes the icon off the taskbar. A program that ends without this leaves a ghost icon until the mouse passes over it
+/// (measured 2026-11-10: a Store-style update, which closes the program, left one each time; so did Quit).
+fn remove_icon() {
+    TRAY.with(|t| drop(t.borrow_mut().take()));
+}
+
+/// Windows tells a program it's about to close it (an update from the Store, signing out, shutting down) through its
+/// top-level windows; the tray icon's own window doesn't get it, so this hidden one listens and removes the icon.
+unsafe extern "system" fn closing(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    match msg {
+        WM_QUERYENDSESSION => 1,
+        WM_ENDSESSION if w != 0 => {
+            remove_icon();
+            0
+        }
+        WM_CLOSE => {
+            remove_icon();
+            unsafe { PostQuitMessage(0) };
+            0
+        }
+        _ => unsafe { DefWindowProcW(hwnd, msg, w, l) },
+    }
+}
+
+fn listen_for_close() {
+    let class: Vec<u16> = "ControlledPcClose".encode_utf16().chain([0]).collect();
+    unsafe {
+        let instance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null());
+        let wc = WNDCLASSW { lpfnWndProc: Some(closing), hInstance: instance, lpszClassName: class.as_ptr(), ..std::mem::zeroed() };
+        RegisterClassW(&wc);
+        // Never shown: it only receives Windows' close notices.
+        CreateWindowExW(0, class.as_ptr(), class.as_ptr(), WS_OVERLAPPED, 0, 0, 0, 0, 0, 0, instance, std::ptr::null());
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Look {
@@ -53,17 +96,19 @@ pub fn run(shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
         .with_icon(icon(Look::Idle, light_taskbar()))
         .build()
         .expect("tray icon");
+    TRAY.with(|t| *t.borrow_mut() = Some(tray));
+    listen_for_close();
 
     let mut shown: Option<(bool, Option<String>, bool)> = None;
     // One timer wakes the message loop twice a second to refresh the icon. Created once: without a window, every
     // SetTimer call makes a new timer, and a call per loop ran out of Windows' handles within hours (measured: crash).
-    unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetTimer(0, 0, 500, None) };
+    unsafe { SetTimer(0, 0, 500, None) };
     loop {
         // Windows' message loop: the tray icon's clicks and menu arrive through it.
         unsafe {
-            use windows_sys::Win32::UI::WindowsAndMessaging::*;
             let mut msg: MSG = std::mem::zeroed();
             if GetMessageW(&mut msg, 0, 0, 0) <= 0 {
+                remove_icon();
                 return;
             }
             TranslateMessage(&msg);
@@ -71,6 +116,7 @@ pub fn run(shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
         }
         while let Ok(e) = MenuEvent::receiver().try_recv() {
             if e.id == quit.id() {
+                remove_icon();
                 std::process::exit(0);
             } else if e.id == open.id() {
                 show();
@@ -101,8 +147,13 @@ pub fn run(shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
             status.set_text(&text);
             pause.set_text(if *paused { t.resume } else { t.pause });
             let look = if *paused { Look::Paused } else if connected.is_some() { Look::On } else { Look::Idle };
-            let _ = tray.set_icon(Some(icon(look, *light)));
-            let _ = tray.set_tooltip(Some(format!("{}: {text}", t.title)));
+            let tip = format!("{}: {text}", t.title);
+            TRAY.with(|t| {
+                if let Some(tray) = &*t.borrow() {
+                    let _ = tray.set_icon(Some(icon(look, *light)));
+                    let _ = tray.set_tooltip(Some(tip));
+                }
+            });
             shown = Some(now);
         }
     }
