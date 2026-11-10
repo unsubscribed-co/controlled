@@ -1,8 +1,6 @@
 <en-US>
-- New: smooth mode for your PC. Install the free Controlled for PC app (Microsoft Store) and the trackpad goes over Wi-Fi: no stutter, and any character types whatever the PC's keyboard. Bluetooth stays as the backup.
-- Google TV: a clearer message when the TV can't be reached on your Wi-Fi.
+- Fix: on a weak or just-reconnected Wi-Fi, the TV could show as off until you restarted Wi-Fi. The remote now always talks to the TV over Wi-Fi, never mobile data.
 </en-US>
 <es-419>
-- Nuevo: modo fluido para tu PC. Instala la app gratuita Controlled for PC (Microsoft Store) y el trackpad va por Wi-Fi: sin saltos, y escribe cualquier carácter sin importar el teclado del PC. El Bluetooth queda de respaldo.
-- Google TV: un mensaje más claro cuando no llegamos al TV en tu Wi-Fi.
+- Arreglo: con un Wi-Fi débil o recién reconectado, el TV podía aparecer apagado hasta reiniciar el Wi-Fi. El control ahora siempre le habla al TV por Wi-Fi, nunca por datos móviles.
 </es-419>
