@@ -126,10 +126,13 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     var offering by remember { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
     // Once per administrator window, when a click or key would be lost: why, and the way out.
+    // Marked shown only once it's gone: changing the key while it shows would cancel it (measured: it never appeared).
+    // The administrator window leaving clears the key, which takes the message away with it.
     LaunchedEffect(hid.adminHintDue) {
         if (!hid.adminHintDue) return@LaunchedEffect
+        val result = snack.showSnackbar(t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long)
         hid.adminHintShown()
-        if (snack.showSnackbar(t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) hid.useBluetoothHere()
+        if (result == SnackbarResult.ActionPerformed) hid.useBluetoothHere()
     }
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
