@@ -164,12 +164,16 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
 
     private val wifi = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
+            // Every TV and PC is on the home Wi-Fi: without this, Android sends us over mobile data while it rechecks a
+            // Wi-Fi that just came back (measured on Juan's POCO, 2026-11-09), and the TV reads as off.
+            cm.bindProcessToNetwork(network)
             viewModelScope.launch { if (visible && link == Link.NoWifi || link == Link.Off) connect() }
         }
 
         override fun onLost(network: Network) {
             viewModelScope.launch {
                 if (!hasWifi()) {
+                    cm.bindProcessToNetwork(null)
                     session?.cancel()
                     disconnect()
                     link = Link.NoWifi
