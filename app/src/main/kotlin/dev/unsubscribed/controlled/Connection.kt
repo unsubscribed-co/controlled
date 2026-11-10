@@ -47,8 +47,10 @@ fun next(s: Status, e: Event): Status = when (e) {
     is Event.Asleep -> if (s is Status.Connected) Status.Connected(e.asleep) else s
     Event.Ended -> if (s is Status.Connected) Status.Connecting else s
     Event.Failed -> when (s) {
-        Status.Connecting, is Status.Connected -> Status.Waiting()
-        else -> s // Waking keeps waking; Waiting keeps its reason; no Wi-Fi and Refused stay until resolved.
+        Status.Connecting -> Status.Waiting()
+        // Connected: a late failure from an older attempt, never this session's (that one ends with Ended). Waking keeps
+        // waking; Waiting keeps its reason; no Wi-Fi and Refused stay until resolved.
+        else -> s
     }
     Event.WakeStarted -> if (s is Status.NoWifi || s is Status.Refused) s else Status.Waking
     Event.WakeTimedOut -> if (s is Status.Waking) Status.Waiting(Why.WakeFailed) else s

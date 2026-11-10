@@ -25,6 +25,11 @@ class ConnectionTest {
         assertEquals(Status.Waiting(), run(Status.Connected(), Event.Ended, Event.Failed))
     }
 
+    @Test fun aLateFailureNeverDropsALiveConnection() {
+        // 2026-11-10: an attempt from a cancelled loop failed 2 s after the new one connected, and the screen said unreachable.
+        assertEquals(Status.Connected(asleep = true), run(Status.Connected(asleep = true), Event.Failed))
+    }
+
     @Test fun onlyTheFirstSearchIsShown() {
         assertEquals(Status.Waiting(searching = true), run(Status.Waiting(), Event.Searching(true)))
         assertEquals(Status.Waiting(), run(Status.Waiting(), Event.Searching(true), Event.SearchDone, Event.Searching(false)))

@@ -20,7 +20,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
@@ -181,7 +183,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             // Bound to a network that's gone, every new socket fails with ENONET (it crashed the search, 2026-11-10).
             if (cm.boundNetworkForProcess == network) cm.bindProcessToNetwork(null)
             viewModelScope.launch {
-                if (!hasWifi()) {
+                // The lost network can still be listed for a moment: only another Wi-Fi counts.
+                if (!hasWifi(except = network)) {
                     session?.cancel()
                     disconnect()
                     on(Event.WifiLost)
@@ -197,7 +200,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     /** This app's traffic goes through a VPN: one that takes the home network (Tailscale's subnet routes did) hides the TV. */
     val vpn get() = cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
 
-    private fun hasWifi() = cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+    private fun hasWifi(except: Network? = null) =
+        cm.allNetworks.any { it != except && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
 
     /** The activity is on screen: back to a live socket if the grace kept one (checked with a quick probe), else connect. */
     fun start() {
@@ -499,6 +503,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    // A blocking connect can outlive its loop's cancellation: a replaced loop reports nothing.
+                    ensureActive()
                     // Any failure is a failed attempt: a network error must never end the loop (or crash the app).
                     val kind = (e as? TvException)?.kind
                     log { "connect failed: $kind $e cause=${e.cause}" }
@@ -521,7 +527,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             val g = GtvClient(current.ip, current.pin ?: throw TvException(TvException.Kind.Rejected, "No pairing code stored"))
             try {
                 g.open()
-            } catch (e: TvException) {
+                currentCoroutineContext().ensureActive() // replaced while connecting: don't take over the newer session
+            } catch (e: Exception) {
                 g.close()
                 throw e
             }
@@ -530,7 +537,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         val c = TvClient(current.ip, http)
         try {
             c.connect(current.clientKey, current.pin)
-        } catch (e: TvException) {
+            currentCoroutineContext().ensureActive()
+        } catch (e: Exception) {
             c.close()
             throw e
         }
