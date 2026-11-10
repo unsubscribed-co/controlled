@@ -1,8 +1,8 @@
 <en-US>
-- PC: if another remote app on your phone is using it as a keyboard, Controlled now says so instead of saying the phone can't.
-- PC: new "Fix keyboard and mouse" in the PC's menu, for when keys repeat or the pointer acts strange.
+- PC smooth mode: the PC lists your phone by its name ("POCO X7 Pro"), not a model code.
+- PC smooth mode: if the PC goes to sleep or leaves the network, control goes back to Bluetooth within seconds (with Controlled for PC 1.0.2).
 </en-US>
 <es-419>
-- PC: si otra app de control remoto en tu celular lo está usando como teclado, Controlled ahora lo dice en vez de decir que el celular no puede.
-- PC: nuevo "Arreglar teclado y mouse" en el menú del PC, para cuando las teclas se repiten o el puntero se comporta raro.
+- Modo fluido del PC: el PC muestra tu celular por su nombre ("POCO X7 Pro"), no por un código de modelo.
+- Modo fluido del PC: si el PC se duerme o sale de la red, el control vuelve al Bluetooth en segundos (con Controlled for PC 1.0.2).
 </es-419>
