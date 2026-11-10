@@ -1,8 +1,8 @@
 <en-US>
-- PC smooth mode: the PC lists your phone by its name ("POCO X7 Pro"), not a model code.
-- PC smooth mode: if the PC goes to sleep or leaves the network, control goes back to Bluetooth within seconds (with Controlled for PC 1.0.2).
+- PC smooth mode: where Windows blocks it (apps run as administrator, Ctrl+Alt+Del, the lock screen), Controlled tells you once and offers Use Bluetooth; it goes back to smooth mode by itself afterwards.
+- Ctrl+Alt+Del and Lock PC always work, through Bluetooth.
 </en-US>
 <es-419>
-- Modo fluido del PC: el PC muestra tu celular por su nombre ("POCO X7 Pro"), no por un código de modelo.
-- Modo fluido del PC: si el PC se duerme o sale de la red, el control vuelve al Bluetooth en segundos (con Controlled for PC 1.0.2).
+- Modo fluido del PC: donde Windows lo bloquea (apps de administrador, Ctrl+Alt+Supr, la pantalla de bloqueo), Controlled te avisa una vez y ofrece Usar Bluetooth; después vuelve solo al modo fluido.
+- Ctrl+Alt+Supr y Bloquear PC siempre funcionan, por Bluetooth.
 </es-419>
