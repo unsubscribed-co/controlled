@@ -1,8 +1,10 @@
 <en-US>
-- Reconnecting: if your TV gets a new address (a new router or Wi-Fi), the remote finds it again on its own, and keeps looking while it waits.
-- Clearer status: "Waiting for your TV" while the remote keeps trying, and "Looking for your TV on this Wi-Fi" while it searches.
+- Fix: the app could close when your phone's Wi-Fi dropped. It now shows "No Wi-Fi" and reconnects by itself when Wi-Fi is back.
+- The status line is always right: no more "The TV didn't wake" after turning the TV off, and no "can't reach" while connected.
+- Turn on waits a little longer for TVs that are slow to wake.
 </en-US>
 <es-419>
-- Reconexión: si tu TV cambia de dirección (un router o Wi-Fi nuevo), el control lo vuelve a encontrar solo, y sigue buscándolo mientras espera.
-- Estado más claro: "Esperando tu TV" mientras el control sigue intentando, y "Buscando tu TV en este Wi-Fi" mientras lo busca.
+- Arreglo: la app podía cerrarse cuando se caía el Wi-Fi del celular. Ahora muestra "Sin Wi-Fi" y se reconecta sola cuando vuelve.
+- El estado siempre es correcto: ya no dice "El TV no encendió" después de apagarlo, ni "no se puede conectar" estando conectado.
+- Encender espera un poco más a los TV que tardan en despertar.
 </es-419>
