@@ -41,6 +41,7 @@ interface Strings {
     val connecting: String
     val turningOn: String
     val tvOff: String
+    val waiting: String
     val tvOffNoPower: String
     val lookingForTv: String
     val gtvUnreachable: String
@@ -260,8 +261,9 @@ object En : Strings {
 
     override val connecting = "Connecting…"
     override val turningOn = "Turning on…"
-    override val tvOff = "TV is off. Still trying, or tap to turn on"
-    override val tvOffNoPower = "TV is off or out of reach. Still trying, or tap to retry now"
+    override val tvOff = "TV is off. Tap to turn it on"
+    override val waiting = "Waiting for your TV. Tap to turn it on"
+    override val tvOffNoPower = "Waiting for your TV. Tap to try now"
     override val lookingForTv = "Looking for your TV on this Wi-Fi…"
     override val gtvUnreachable = "Can't reach the TV. Check it's on this phone's Wi-Fi; if it is, on the TV forget the Wi-Fi network and join it again. Tap to retry"
     override val noWifi = "No Wi-Fi. Connect to your home Wi-Fi"
@@ -469,8 +471,9 @@ object Es : Strings {
 
     override val connecting = "Conectando…"
     override val turningOn = "Encendiendo…"
-    override val tvOff = "El TV está apagado. Sigo intentando, o toca para encender"
-    override val tvOffNoPower = "El TV está apagado o fuera de alcance. Sigo intentando, o toca para reintentar ya"
+    override val tvOff = "El TV está apagado. Toca para encenderlo"
+    override val waiting = "Esperando tu TV. Toca para encenderlo"
+    override val tvOffNoPower = "Esperando tu TV. Toca para intentar ya"
     override val lookingForTv = "Buscando tu TV en este Wi-Fi…"
     override val gtvUnreachable = "No llegamos al TV. Revisa que esté en el mismo Wi-Fi que este celular; si lo está, en el TV olvida la red Wi-Fi y vuelve a unirte. Toca para reintentar"
     override val noWifi = "Sin Wi-Fi. Conéctate al Wi-Fi de tu casa"
