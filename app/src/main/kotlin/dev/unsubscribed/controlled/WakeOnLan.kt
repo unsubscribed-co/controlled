@@ -32,7 +32,8 @@ object WakeOnLan {
 
     suspend fun send(context: Context, macs: List<String>, ip: String) = withContext(Dispatchers.IO) {
         val targets = listOfNotNull(runCatching { InetAddress.getByName(ip) }.getOrNull(), wifiBroadcast(context), InetAddress.getByName("255.255.255.255"))
-        DatagramSocket().use { socket ->
+        val socket = runCatching { DatagramSocket() }.getOrElse { return@withContext log { "wake: no socket: $it" } }
+        socket.use {
             socket.broadcast = true
             log { "wake: macs=$macs targets=$targets" }
             for (packet in macs.mapNotNull(::packet)) for (target in targets) {

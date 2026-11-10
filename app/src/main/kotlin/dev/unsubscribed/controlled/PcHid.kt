@@ -64,13 +64,13 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         Thread {
             val to = findSmoothPc(app, name)
             log { "smooth: looked for '$name', found $to" }
-            val link = SmoothLink(app)
-            val ok = to != null && run == smoothRun && runCatching {
+            val link = runCatching { SmoothLink(app) }.onFailure { log { "smooth: $it" } }.getOrNull()
+            val ok = link != null && to != null && run == smoothRun && runCatching {
                 link.connect(to) { code -> handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
             }.onFailure { log { "smooth: $it" } }.getOrDefault(false)
             handler.post { smoothCode = null }
-            if (!ok || run != smoothRun) {
-                link.close()
+            if (link == null || !ok || run != smoothRun) {
+                link?.close()
                 handler.post { if (run == smoothRun) { smooth = Smooth.Off; smoothFor = null; handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, Hid.SMOOTH_RETRY_MS) } }
                 return@Thread
             }

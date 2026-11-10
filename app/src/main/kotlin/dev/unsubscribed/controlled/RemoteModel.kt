@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -177,9 +178,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         }
 
         override fun onLost(network: Network) {
+            // Bound to a network that's gone, every new socket fails with ENONET (it crashed the search, 2026-11-10).
+            if (cm.boundNetworkForProcess == network) cm.bindProcessToNetwork(null)
             viewModelScope.launch {
                 if (!hasWifi()) {
-                    cm.bindProcessToNetwork(null)
                     session?.cancel()
                     disconnect()
                     on(Event.WifiLost)
@@ -494,11 +496,15 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                 try {
                     session(current) // returns when a live session ends
                     attempt = 0
-                } catch (e: TvException) {
-                    log { "connect failed: ${e.kind} $e cause=${e.cause}" }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Any failure is a failed attempt: a network error must never end the loop (or crash the app).
+                    val kind = (e as? TvException)?.kind
+                    log { "connect failed: $kind $e cause=${e.cause}" }
                     // A Google TV that refuses our certificate was reset or dropped this phone: pair again.
-                    val forgotten = current.brand == Brand.GoogleTv && e.kind == TvException.Kind.Rejected
-                    if (e.kind == TvException.Kind.CertificateChanged || forgotten) return@launch on(Event.Refused(forgotten))
+                    val forgotten = current.brand == Brand.GoogleTv && kind == TvException.Kind.Rejected
+                    if (kind == TvException.Kind.CertificateChanged || forgotten) return@launch on(Event.Refused(forgotten))
                     if (!waking) on(Event.WakeTimedOut)
                     if (attempt >= 1) on(Event.Failed)
                     if (!waking && searchNow(attempt) && lookAgain(current, attempt)) continue
@@ -571,6 +577,11 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         on(Event.Searching(shown = attempt == 2))
         try {
             return refind(current)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log { "search failed: $e" } // no network for it right now: the loop just tries again
+            return false
         } finally {
             on(Event.SearchDone)
         }

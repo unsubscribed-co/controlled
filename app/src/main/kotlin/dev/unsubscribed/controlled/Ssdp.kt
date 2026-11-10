@@ -105,7 +105,7 @@ object Ssdp {
         try {
             // From the Wi-Fi's address, so the search doesn't go out on mobile data or a VPN.
             val udp = getWifiIpv4Address(context)?.let { runCatching { DatagramSocket(InetSocketAddress(it, 0)) }.getOrNull() }
-                ?: DatagramSocket()
+                ?: runCatching { DatagramSocket() }.getOrNull() ?: return@channelFlow
             socket = udp
             val multicastAddress = InetAddress.getByName("239.255.255.250")
             val searchBytes = searchMessage().toByteArray(Charsets.UTF_8)
