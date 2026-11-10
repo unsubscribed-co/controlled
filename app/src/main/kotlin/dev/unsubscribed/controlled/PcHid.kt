@@ -188,6 +188,8 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         if (!admin) {
             hinted = false
             adminHintDue = false
+            // Back to smooth mode at once, unless something is held (then at its release, in smoothLink).
+            if (!bluetoothHere(useBluetooth, false, held != 0 || switching)) useBluetooth = false
         }
     }
 
