@@ -7,6 +7,7 @@ import java.io.DataOutputStream
 import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -112,6 +113,9 @@ class SmoothLink(context: Context) {
     }
 }
 
+/** The PC program listens on IPv4 only: of the addresses mDNS gives, its IPv4 one (a link-local IPv6 timed out). */
+fun smoothHost(addresses: List<InetAddress>): InetAddress? = addresses.firstOrNull { it is Inet4Address }
+
 /**
  * Finds controlled-pc on this Wi-Fi by mDNS: the program named like [pcName] (the PC's own name, which is also its
  * Bluetooth name), or null within [timeoutMs]. Blocking: call off the main thread.
@@ -124,7 +128,8 @@ fun findSmoothPc(context: Context, pcName: String, timeoutMs: Long = 4000): Inet
     val resolve = object : NsdManager.ResolveListener {
         override fun onResolveFailed(info: NsdServiceInfo, error: Int) = Unit
         override fun onServiceResolved(info: NsdServiceInfo) {
-            info.host?.let { found = InetSocketAddress(it, info.port); done.countDown() }
+            val all = if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else listOfNotNull(info.host)
+            smoothHost(all)?.let { found = InetSocketAddress(it, info.port); done.countDown() }
         }
     }
     val listener = object : NsdManager.DiscoveryListener {
