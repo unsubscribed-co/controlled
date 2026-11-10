@@ -151,6 +151,9 @@ interface Strings {
     val pcNoBluetooth: String
     /** The phone refuses to act as a Bluetooth keyboard (some makers turn it off). */
     val pcUnsupported: String
+    val pcBusy: String
+    val fixKeys: String
+    val fixKeysBody: String
     /** A computer paired before has the phone saved without the keyboard: remove it there and add it again. */
     /** Adding a PC is taking long: the likely miss. */
     val addPcSlow: String
@@ -368,6 +371,9 @@ object En : Strings {
     override val pcConnected = "Connected"
     override val pcNoBluetooth = "Turn on Bluetooth to use the PC"
     override val pcUnsupported = "This phone can't act as a Bluetooth keyboard, so it can't control a PC"
+    override val pcBusy = "Another app on this phone is acting as its keyboard (another remote app?). Close it to control this PC"
+    override val fixKeys = "Fix keyboard and mouse"
+    override val fixKeysBody = "If keys repeat, the wrong characters come out or the pointer acts strange, the PC kept an old setup for this phone (another remote app can cause it).\n\nOn the PC, open Settings > Bluetooth & devices and remove this phone. Then tap Add a PC and pair again."
     override val addPcSlow = "Still waiting? Keep this screen open while the PC adds the phone. If the PC already lists this phone, remove it there and add it again."
     override val pcPermission = "Controlled works as a Bluetooth keyboard and mouse for your PC. Android will ask to let it connect to nearby devices."
     override val addPcTitle = "Add a PC"
@@ -580,6 +586,9 @@ object Es : Strings {
     override val pcConnected = "Conectado"
     override val pcNoBluetooth = "Activa el Bluetooth para usar el PC"
     override val pcUnsupported = "Este teléfono no puede funcionar como teclado Bluetooth, así que no puede controlar un PC"
+    override val pcBusy = "Otra app de este celular está funcionando como su teclado (¿otra app de control remoto?). Ciérrala para controlar este PC"
+    override val fixKeys = "Arreglar teclado y mouse"
+    override val fixKeysBody = "Si las teclas se repiten, salen caracteres equivocados o el puntero se comporta raro, el PC guardó una configuración vieja de este celular (otra app de control remoto puede causarlo).\n\nEn el PC, abre Configuración > Bluetooth y dispositivos y quita este celular. Luego toca Agregar un PC y empareja de nuevo."
     override val addPcSlow = "¿Sigue esperando? Deja esta pantalla abierta mientras el PC agrega el teléfono. Si el PC ya muestra este teléfono, quítalo ahí y agrégalo otra vez."
     override val pcPermission = "Controlled funciona como teclado y mouse Bluetooth para tu PC. Android te pedirá permiso para conectarse a dispositivos cercanos."
     override val addPcTitle = "Agregar un PC"

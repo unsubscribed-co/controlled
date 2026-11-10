@@ -178,6 +178,7 @@ private fun PcStatus(hid: PcHid) {
         PcLink.Starting, PcLink.Off -> t.connecting
         PcLink.NoBluetooth -> t.pcNoBluetooth
         PcLink.Unsupported -> t.pcUnsupported
+        PcLink.Busy -> t.pcBusy
     }
     Row(Modifier.heightIn(min = 32.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
         val dot = Modifier.size(8.dp).clip(CircleShape)

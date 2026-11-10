@@ -20,8 +20,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.util.concurrent.Executor
 
-/** The PC link: the phone as a Bluetooth keyboard and mouse. Unsupported: Bluetooth is on, but this phone refuses to be one. */
-enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported }
+/**
+ * The PC link: the phone as a Bluetooth keyboard and mouse. Unsupported: Bluetooth is on, but this phone refuses to be
+ * one. Busy: it has been one before, so the refusal is another app holding the role (blek did, 2026-11-10).
+ */
+enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported, Busy }
 
 /** Smooth mode (docs/plans/pc-wifi.md): the same input over Wi-Fi to Controlled for PC, when that PC runs it. */
 enum class Smooth { Off, Pairing, On }
@@ -51,6 +54,9 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private val app = context.applicationContext
     private val adapter = app.getSystemService(BluetoothManager::class.java)?.adapter
     private val main = Executor { app.mainExecutor.execute(it) }
+    /** Whether this phone has ever taken the keyboard role for us: a later refusal is then another app holding it. */
+    private val prefs = app.getSharedPreferences("hid", Context.MODE_PRIVATE)
+    private val refused get() = if (prefs.getBoolean("worked", false)) PcLink.Busy else PcLink.Unsupported
 
     var link by mutableStateOf(PcLink.Off)
         private set
@@ -161,6 +167,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             log { "hid registered=$registered plugged=${pluggedDevice?.address}" }
             if (!registered) { host = null; if (hid != null) link = PcLink.Waiting; return }
+            prefs.edit().putBoolean("worked", true).apply()
             link = PcLink.Waiting
             // Adding: just wait. Calling a computer already paired with the phone collides with that computer pairing again
             // (measured: Windows' pairing failed 30 s later with an L2CAP config error, and it was left "Paired" without the keyboard).
@@ -193,7 +200,7 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
             val h = proxy as BluetoothHidDevice
             hid = h
             // Bluetooth is on (checked before asking): a refusal here is the phone not offering the keyboard role.
-            if (!register(h)) link = PcLink.Unsupported
+            if (!register(h)) link = refused
         }
 
         override fun onServiceDisconnected(profile: Int) {

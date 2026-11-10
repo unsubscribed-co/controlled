@@ -70,6 +70,7 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
     val t = LocalStrings.current
     var renaming by remember { mutableStateOf<Controller?>(null) }
     var layoutOf by remember { mutableStateOf<PairedPc?>(null) }
+    var fixing by remember { mutableStateOf(false) }
     ModalBottomSheet(close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
             SheetTitle(t.controllers)
@@ -77,7 +78,7 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
             for (c in model.controllers.all) {
                 ControllerRow(c, current = c.id == current, default = c.id == model.controllers.defaultOne()?.id,
                     open = { model.select(c); close() }, rename = { renaming = c }, makeDefault = { model.setDefault(c) }, remove = { model.remove(c) },
-                    layout = (c as? PairedPc)?.let { { layoutOf = it } })
+                    layout = (c as? PairedPc)?.let { { layoutOf = it } }, fix = if (c is PairedPc) ({ fixing = true }) else null)
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilledTonalButton({ model.addTv(); close() }, Modifier.weight(1f).heightIn(min = 48.dp)) {
@@ -93,6 +94,15 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
     }
     renaming?.let { c -> RenameDialog(c.name, { renaming = null }, pc = c is PairedPc) { model.renameController(c, it); renaming = null } }
     layoutOf?.let { pc -> LayoutDialog(pc.layout, { layoutOf = null }) { model.setLayout(pc, it); layoutOf = null } }
+    // Windows keeps a phone's keyboard description from when it paired: another remote app pairing as this phone leaves
+    // keys repeating and the pointer odd until it pairs again (2026-11-10, after blek). Only the PC can drop it.
+    if (fixing) AlertDialog(
+        onDismissRequest = { fixing = false },
+        confirmButton = { TextButton({ fixing = false; model.addPc(); close() }) { Text(t.addPc) } },
+        dismissButton = { TextButton({ fixing = false }) { Text(t.notNow) } },
+        title = { Text(t.fixKeys) },
+        text = { Text(t.fixKeysBody) },
+    )
 }
 
 /** The layout's name, as the person picks it. */
@@ -124,7 +134,7 @@ fun LayoutDialog(current: Layout, dismiss: () -> Unit, title: String = LocalStri
 }
 
 @Composable
-private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, open: () -> Unit, rename: () -> Unit, makeDefault: () -> Unit, remove: () -> Unit, layout: (() -> Unit)?) {
+private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, open: () -> Unit, rename: () -> Unit, makeDefault: () -> Unit, remove: () -> Unit, layout: (() -> Unit)?, fix: (() -> Unit)? = null) {
     val t = LocalStrings.current
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
@@ -148,6 +158,7 @@ private fun ControllerRow(c: Controller, current: Boolean, default: Boolean, ope
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem({ Text(t.rename) }, { menu = false; rename() })
                         layout?.let { DropdownMenuItem({ Text(t.keyboardLayout) }, { menu = false; it() }, leadingIcon = { Icon(painterResource(R.drawable.sym_keyboard), null) }) }
+                        fix?.let { DropdownMenuItem({ Text(t.fixKeys) }, { menu = false; it() }) }
                         if (!default) DropdownMenuItem({ Text(t.makeDefault) }, { menu = false; makeDefault() },
                             leadingIcon = { Icon(painterResource(R.drawable.sym_star), null) })
                         DropdownMenuItem({ Text(t.remove) }, { menu = false; remove() }, leadingIcon = { Icon(painterResource(R.drawable.sym_link_off), null) })
