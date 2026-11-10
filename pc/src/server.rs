@@ -69,6 +69,9 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
     let pc_pub = crypto::public_bytes(key);
     let pc_nonce: [u8; crypto::NONCE_LEN] = rand::random();
     let known = state::is_allowed(&phone_key);
+    if known {
+        state::rename(&phone_key, &name);
+    }
     let mut reply = vec![b'H', 1];
     reply.extend_from_slice(&pc_pub);
     reply.extend_from_slice(&pc_nonce);

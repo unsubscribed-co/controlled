@@ -2,6 +2,7 @@ package dev.unsubscribed.controlled
 
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -25,6 +26,12 @@ import java.util.concurrent.TimeUnit
  */
 class SmoothLink(context: Context) {
     private val keyFile = File(context.filesDir, "smooth.key")
+    /**
+     * How the PC lists this phone: the name in Settings > About phone ("POCO X7 Pro"), not the model code Xiaomi puts
+     * in Build.MODEL ("2412DPC0AG"). The dev app says so, as it's a second app on the same phone.
+     */
+    private val name = (Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() }
+        ?: "${Build.MANUFACTURER} ${Build.MODEL}") + if (BuildConfig.FLAVOR == "dev") " (Dev)" else ""
     private val tcp = Socket()
     private val udp = DatagramSocket()
     private lateinit var out: DataOutputStream
@@ -57,7 +64,7 @@ class SmoothLink(context: Context) {
         out = DataOutputStream(tcp.getOutputStream())
         val input = DataInputStream(tcp.getInputStream())
         val nonce = ByteArray(16).also(SecureRandom()::nextBytes)
-        frame(byteArrayOf('H'.code.toByte(), 1) + phonePub + nonce + Build.MODEL.toByteArray())
+        frame(byteArrayOf('H'.code.toByte(), 1) + phonePub + nonce + name.toByteArray())
         val hello = ByteArray(input.readUnsignedShort()).also(input::readFully)
         if (hello.size < 2 + 65 + 16 + 1 || hello[0] != 'H'.code.toByte() || hello[1] != 1.toByte()) return false
         val pcPub = hello.copyOfRange(2, 67)

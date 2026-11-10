@@ -94,8 +94,31 @@ pub fn allow(key: &str, name: &str) {
     if is_allowed(key) {
         return;
     }
+    let name = unique(&phones(), key, name);
     let mut f = std::fs::OpenOptions::new().create(true).append(true).open(phones_path()).expect("phones file");
-    let _ = writeln!(f, "{key}\t{}", name.replace(['\t', '\n'], " "));
+    let _ = writeln!(f, "{key}\t{name}");
+}
+
+/// A known phone that now gives a friendlier name (phones before 1.19 sent their model code, "2412DPC0AG"): keep it.
+pub fn rename(key: &str, name: &str) {
+    let list = phones();
+    let Some((_, old)) = list.iter().find(|(k, _)| k == key) else { return };
+    let new = unique(&list, key, name);
+    if *old == new {
+        return;
+    }
+    let kept: String = list.iter().map(|(k, n)| format!("{k}\t{}\n", if k == key { &new } else { n })).collect();
+    let _ = std::fs::write(phones_path(), kept);
+}
+
+/// [name] for [key] in [list], numbered when another phone already has it: two of the same model, or the dev app on
+/// the same phone, read "POCO X7 Pro" and "POCO X7 Pro 2". A name [key] already holds stays as it is.
+fn unique(list: &[(String, String)], key: &str, name: &str) -> String {
+    let base = name.replace(['\t', '\n'], " ").trim().to_owned();
+    let base = if base.is_empty() { "Phone".to_owned() } else { base };
+    let taken = |n: &str| list.iter().any(|(k, other)| k != key && other == n);
+    let mine = list.iter().find(|(k, _)| k == key).map(|(_, n)| n.as_str());
+    (1..).map(|i| if i == 1 { base.clone() } else { format!("{base} {i}") }).find(|n| mine == Some(n.as_str()) || !taken(n)).unwrap()
 }
 
 pub fn remove(key: &str) {
@@ -123,5 +146,15 @@ mod tests {
         assert_eq!(std::fs::read_to_string(new.join("key")).unwrap(), "new");
         assert!(!old.exists());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn same_names_are_numbered_and_kept() {
+        let list = vec![("a".to_owned(), "POCO X7 Pro".to_owned()), ("b".to_owned(), "POCO X7 Pro 2".to_owned())];
+        assert_eq!(unique(&list, "c", "POCO X7 Pro"), "POCO X7 Pro 3");
+        assert_eq!(unique(&list, "b", "POCO X7 Pro"), "POCO X7 Pro 2"); // b keeps its number
+        assert_eq!(unique(&list, "a", "POCO X7 Pro"), "POCO X7 Pro");
+        assert_eq!(unique(&list, "c", "Pixel 8"), "Pixel 8");
+        assert_eq!(unique(&list, "c", " \t"), "Phone");
     }
 }
