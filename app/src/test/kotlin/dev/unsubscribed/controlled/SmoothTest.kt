@@ -9,18 +9,33 @@ class SmoothTest {
         assertEquals(null, smoothRetryMs(SmoothEnd.Declined, 0))
     }
 
-    @Test fun aPcNotFoundYetIsLookedForFastThenEvery20Seconds() {
-        // 2026-11-10: right after Wi-Fi came back mDNS found nothing, and the next look was 20 s later.
-        assertEquals(listOf(2_000L, 5_000L, 10_000L, 20_000L, 20_000L), (0..4).map { smoothRetryMs(SmoothEnd.NotFound, it) })
-        assertEquals(2_000L, smoothRetryMs(SmoothEnd.Unreachable, 0))
+    @Test fun aPcNotThereYetIsTriedFastThenEvery10Seconds() {
+        // 2026-11-10: reopening the PC program took 21 s to bring smooth mode back; the cap is now 10 s.
+        assertEquals(listOf(2_000L, 5_000L, 10_000L, 10_000L, 10_000L), (0..4).map { smoothRetryMs(SmoothEnd.NoProgram, it) })
+        assertEquals(2_000L, smoothRetryMs(SmoothEnd.OtherNetwork, 0))
+        assertEquals(2_000L, smoothRetryMs(SmoothEnd.NoWifi, 0))
+        assertEquals(2_000L, smoothRetryMs(SmoothEnd.Busy, 0))
+        assertEquals(2_000L, smoothRetryMs(SmoothEnd.Paused, 0))
     }
 
-    @Test fun thePcIsReachedOnItsIpv4Address() {
-        // 2026-11-10: mDNS gave the PC's link-local IPv6 first; the program listens on IPv4 only, so the connect timed out.
-        val v6 = java.net.InetAddress.getByName("fe80::ee05:9896:8fbb:a1d2")
-        val v4 = java.net.InetAddress.getByName("192.168.0.13")
-        assertEquals(v4, smoothHost(listOf(v6, v4)))
-        assertEquals(null, smoothHost(listOf(v6)))
+    @Test fun aPcThatCantDialInIsOnAnotherNetworkOrOneThatKeepsDevicesApart() {
+        // 2026-11-10: a laptop on a second router's Wi-Fi with the same name: 192.168.1.13, the phone 192.168.0.23/24.
+        val phone = byteArrayOf(192.toByte(), 168.toByte(), 0, 23)
+        assertEquals(false, sameNetwork(phone, 24, byteArrayOf(192.toByte(), 168.toByte(), 1, 13)))
+        assertEquals(true, sameNetwork(phone, 24, byteArrayOf(192.toByte(), 168.toByte(), 0, 13)))
+        assertEquals(true, sameNetwork(phone, 16, byteArrayOf(192.toByte(), 168.toByte(), 1, 13)))
+        assertEquals(false, sameNetwork(phone, 32, byteArrayOf(192.toByte(), 168.toByte(), 0, 24)))
+    }
+
+    @Test fun aLongPasteGoesInPiecesThatFitAFrame() {
+        // A frame's length is 16 bits: a 70,000-character paste broke the session.
+        assertEquals(listOf(8_000, 8_000, 4_000), textPieces("a".repeat(20_000)).map { it.length })
+        // An emoji is two chars: a piece never ends between them.
+        val emoji = "a".repeat(7_999) + String(Character.toChars(0x1F600)) + "b"
+        val pieces = textPieces(emoji)
+        assertEquals(emoji, pieces.joinToString(""))
+        assertEquals(7_999, pieces[0].length)
+        assertEquals(listOf<String>(), textPieces(""))
     }
 
     @Test fun bluetoothHereLastsWhileWindowsBlocksAndUntilNothingIsHeld() {

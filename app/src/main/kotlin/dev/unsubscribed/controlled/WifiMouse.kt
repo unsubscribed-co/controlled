@@ -1,17 +1,20 @@
 package dev.unsubscribed.controlled
 
+import android.bluetooth.BluetoothManager
 import android.content.Context
 
 /**
- * Smooth mode test driver (dev only): --es wifi_mouse <pc ip>. Connects with SmoothLink (logging the pairing code),
- * then draws the BLE spike's back-and-forth stroke, 3 px every 8 ms for 20 s, clicks once and types a word.
+ * Smooth mode test driver (dev only): --es wifi_mouse <PC Bluetooth address>. Connects with SmoothLink (logging the pairing code),
+ * then draws the BLE spike's back-and-forth stroke, 3 px every 8 ms for 20 s. Moves only: no clicks, no keys.
  */
 object WifiMouse {
-    fun draw(context: Context, host: String) = Thread {
+    @android.annotation.SuppressLint("MissingPermission")
+    fun draw(context: Context, pc: String) = Thread {
         val link = SmoothLink(context)
-        val ok = runCatching { link.connect(host) { code -> log { "wifi mouse code $code" } } }.onFailure { log { "wifi mouse: $it" } }.getOrDefault(false)
-        log { "wifi mouse connected=$ok" }
-        if (!ok) return@Thread link.close()
+        val device = context.getSystemService(BluetoothManager::class.java).adapter.getRemoteDevice(pc)
+        val end0 = runCatching { link.connect(device) { code -> log { "wifi mouse code $code" } } }.getOrElse { log { "wifi mouse: $it" }; SmoothEnd.NoProgram }
+        log { "wifi mouse: ${end0 ?: "connected"} ${link.addresses ?: ""}" }
+        if (end0 != null) return@Thread link.close()
         val end = System.nanoTime() + 20_000_000_000L
         var t = 0
         var next = System.nanoTime()

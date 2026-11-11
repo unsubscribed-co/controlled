@@ -41,7 +41,7 @@ p { margin: 0; }
 .dot { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--card-2); border: 1px solid var(--stroke); }
 .dot svg { width: 20px; height: 20px; }
 .status.on .dot { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.status.paused .dot { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.status.paused .dot, .status.nobt .dot { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
 .status .title { font-weight: 600; font-size: 16px; line-height: 22px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .divider { height: 1px; background: var(--stroke); margin: 14px -16px; }
@@ -84,7 +84,8 @@ const T = {
   en: {
     title: "Controlled for PC",
     on: "Connected to {name}", onNote: "This phone is controlling the mouse and keyboard.",
-    ready: "Ready", readyNote: "Waiting for an allowed phone on this Wi-Fi.",
+    ready: "Ready", readyNote: "Open this PC in Controlled on your phone, with Wi-Fi on.",
+    nobt: "Bluetooth is off", nobtNote: "Turn on this PC's Bluetooth: that's how your phone finds it.",
     paused: "Paused", pausedNote: "No phone can use smooth mode until you turn it back on.",
     smooth: "Smooth mode", smoothNote: "Lets allowed phones control this PC over Wi-Fi. Turning it off doesn't affect a phone paired over Bluetooth: Windows handles that one.",
     ask: "{name} wants to control this PC", askNote: "Allow it only if your phone shows this same code.",
@@ -97,7 +98,8 @@ const T = {
   es: {
     title: "Controlled for PC",
     on: "Conectado a {name}", onNote: "Este celular está controlando el mouse y el teclado.",
-    ready: "Listo", readyNote: "Esperando un celular permitido en este Wi-Fi.",
+    ready: "Listo", readyNote: "Abre este PC en Controlled desde tu celular, con el Wi-Fi prendido.",
+    nobt: "El Bluetooth está apagado", nobtNote: "Prende el Bluetooth de este PC: así lo encuentra tu celular.",
     paused: "En pausa", pausedNote: "Ningún celular puede usar el modo fluido hasta que lo vuelvas a activar.",
     smooth: "Modo fluido", smoothNote: "Permite que los celulares autorizados controlen este PC por Wi-Fi. Desactivarlo no afecta a un celular emparejado por Bluetooth: ese lo maneja Windows.",
     ask: "{name} quiere controlar este PC", askNote: "Permítelo solo si tu celular muestra este mismo código.",
@@ -117,6 +119,7 @@ const ICON = {
   on: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="2.5" width="8" height="15" rx="2"/><path d="M14 7a4.5 4.5 0 0 1 0 6M16.5 5a8 8 0 0 1 0 10"/></svg>',
   ready: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="2.5" width="8" height="15" rx="2"/><path d="M6 14.5h2"/></svg>',
   phone: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 14.5h2"/></svg>',
+  nobt: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 6.5l8 7-4 3.5v-14l4 3.5-8 7"/></svg>',
   paused: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="3.5" height="12" rx="1"/><rect x="11.5" y="4" width="3.5" height="12" rx="1"/></svg>',
 };
 let confirming = null, last = "";
@@ -129,7 +132,7 @@ function render(s) {
   last = key;
   const app = document.getElementById("app");
   if (!s) { app.innerHTML = `<p class="down muted">${t.down}</p>`; return; }
-  const state = s.paused ? "paused" : s.connected ? "on" : "ready";
+  const state = s.paused ? "paused" : s.connected ? "on" : s.noBluetooth ? "nobt" : "ready";
   const title = state === "on" ? fmt(t.on, s.connected) : t[state];
   const note = state === "on" ? t.onNote : t[state + "Note"];
   // A pairing waiting for the person comes first: it's the one thing to act on now.
@@ -168,8 +171,8 @@ function render(s) {
   if (focused && document.getElementById(focused)) document.getElementById(focused).focus();
   document.getElementById("smooth").onchange = e => send(`pause ${e.target.checked ? 0 : 1}`);
   if (s.ask) {
-    document.getElementById("allow").onclick = () => send("answer 1");
-    document.getElementById("deny").onclick = () => send("answer 0");
+    document.getElementById("allow").onclick = () => send(`answer 1 ${s.ask[0]}`);
+    document.getElementById("deny").onclick = () => send(`answer 0 ${s.ask[0]}`);
   }
   for (const b of app.querySelectorAll("[data-remove]")) b.onclick = () => {
     const k = b.dataset.remove;

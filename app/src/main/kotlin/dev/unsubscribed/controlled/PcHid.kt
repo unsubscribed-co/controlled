@@ -26,7 +26,7 @@ import java.util.concurrent.Executor
  */
 enum class PcLink { Off, Starting, Waiting, Connected, NoBluetooth, Unsupported, Busy }
 
-/** Smooth mode (docs/plans/pc-wifi.md): the same input over Wi-Fi to Controlled for PC, when that PC runs it. */
+/** Smooth mode (docs/plans/pc-wifi.md, pc-bluetooth-rendezvous.md): the same input over Wi-Fi to Controlled for PC, when that PC runs it. */
 enum class Smooth { Off, Pairing, On }
 
 /**
@@ -51,18 +51,15 @@ fun adminHint(front: Front, hinted: Boolean, move: Boolean) = front != Front.Nor
 /** Ctrl+Alt+Del or Lock PC was just sent: the secure screen is coming, though the PC hasn't said so yet. */
 fun effectiveFront(front: Front, expectingSecure: Boolean) = if (expectingSecure && front == Front.Normal) Front.Secure else front
 
-/** How a try at smooth mode ended. */
-enum class SmoothEnd { NotFound, Unreachable, Declined, Ended }
-
 /**
- * When to try smooth mode again after [end], the [misses]th not-found in a row; null: only when the person asks. A PC
- * that said no (or didn't answer the code) isn't asked again by itself: it brought the same question back every 20 s.
- * Not found: soon at first (Wi-Fi just back, the program just opened), then every [Hid.SMOOTH_RETRY_MS].
+ * When to try smooth mode again after [end] (SmoothLink), the [misses]th miss in a row; null: only when the person
+ * asks. A PC that said no (or didn't answer the code) isn't asked again by itself: it brought the same question back
+ * every 20 s. The rest: soon at first (the program just opened, Wi-Fi just back), then every [Hid.SMOOTH_RETRY_MS].
  */
 fun smoothRetryMs(end: SmoothEnd, misses: Int): Long? = when (end) {
-    SmoothEnd.NotFound, SmoothEnd.Unreachable -> listOf(2_000L, 5_000L, 10_000L).getOrElse(misses) { Hid.SMOOTH_RETRY_MS }
     SmoothEnd.Declined -> null
     SmoothEnd.Ended -> 0L
+    else -> listOf(2_000L, 5_000L, 10_000L).getOrElse(misses) { Hid.SMOOTH_RETRY_MS }
 }
 
 /**
@@ -96,36 +93,47 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     /** The PC (address) that didn't allow this phone: smooth mode waits for [askSmoothAgain]. Kept while the app runs. */
     var smoothDeclinedBy by mutableStateOf<String?>(null)
         private set
-    /** Not-found tries in a row, for [smoothRetryMs]; back to 0 once connected or stopped. */
+    /** The attempt meeting the PC right now, so stopping can end it (it may wait up to 95 s for the person). */
+    private var trying: SmoothLink? = null
+    /** Misses in a row, for [smoothRetryMs]; back to 0 once connected or stopped. */
     private var smoothMisses = 0
+    /** Why smooth mode isn't on for this PC (the offer explains it), and the two addresses when the network is why. */
+    var smoothWhy by mutableStateOf<SmoothEnd?>(null)
+        private set
+    var smoothAddresses by mutableStateOf<Pair<String, String>?>(null)
+        private set
 
     /** Bluetooth or smooth mode: either way the PC takes input. */
     val connected get() = link == PcLink.Connected || smooth == Smooth.On
 
-    /** Looks for Controlled for PC on this Wi-Fi under the PC's name; while it answers, input goes that way. */
+    /** Meets Controlled for PC over Bluetooth (SmoothLink); while the Wi-Fi session lasts, input goes that way. */
     private fun startSmooth(address: String) {
         if (smoothFor == address || smoothDeclinedBy == address) return
+        val device = runCatching { adapter?.getRemoteDevice(address) }.getOrNull() ?: return
         smoothFor = address
         val run = ++smoothRun
-        val name = runCatching { adapter?.getRemoteDevice(address)?.name }.getOrNull() ?: return log { "smooth: no name for $address" }.also { smoothFor = null }
+        val link = SmoothLink(app)
+        trying?.let { t -> io.post { t.close() } } // an attempt for another PC that wasn't stopped
+        trying = link
         Thread {
-            val to = findSmoothPc(app, name)
-            log { "smooth: looked for '$name', found $to" }
-            val link = runCatching { SmoothLink(app) }.onFailure { log { "smooth: $it" } }.getOrNull()
-            var asked = false
-            val ok = link != null && to != null && run == smoothRun && runCatching {
-                link.connect(to) { code -> asked = true; handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
-            }.onFailure { log { "smooth: $it" } }.getOrDefault(false)
+            val end = runCatching {
+                link.connect(device) { code -> handler.post { if (run == smoothRun) { smoothCode = code; smooth = Smooth.Pairing } } }
+            }.getOrElse { log { "smooth: $it" }; SmoothEnd.NoProgram }
             handler.post { smoothCode = null }
-            if (link == null || !ok || run != smoothRun) {
-                link?.close()
-                // Asked and not allowed (a No, or nobody answered in time) is the person's answer; not found is the network's.
-                val end = if (to == null) SmoothEnd.NotFound else if (asked) SmoothEnd.Declined else SmoothEnd.Unreachable
-                log { "smooth: ended $end" }
-                handler.post { if (run == smoothRun) smoothEnded(address, run, end) }
+            if (end != null || run != smoothRun) {
+                link.close()
+                log { "smooth: not on: $end" }
+                handler.post { if (run == smoothRun) { smoothAddresses = link.addresses; smoothEnded(address, run, end ?: SmoothEnd.Ended) } }
                 return@Thread
             }
-            handler.post { if (run == smoothRun) { wifi = link; smooth = Smooth.On; smoothMisses = 0 } }
+            handler.post {
+                if (run == smoothRun) {
+                    wifi = link; smooth = Smooth.On; smoothMisses = 0; smoothWhy = null
+                    // Mid-drag or mid window switch: finish it over Bluetooth (backToSmooth moves to Wi-Fi at the
+                    // release). Else input moves to Wi-Fi now, and nothing stays held on the Bluetooth side.
+                    if (held != 0 || switching) useBluetooth = true else releaseBluetooth()
+                } else link.close() // stopped meanwhile: don't keep a session nobody uses
+            }
             link.awaitClose { front -> handler.post { if (wifi === link) frontChanged(front) } }
             log { "smooth: session closed" }
             handler.post {
@@ -140,9 +148,10 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
     private fun smoothEnded(address: String, run: Int, end: SmoothEnd) {
         smooth = Smooth.Off
         smoothFor = null
+        if (end != SmoothEnd.Ended) smoothWhy = end
         if (end == SmoothEnd.Declined) smoothDeclinedBy = address
         val wait = smoothRetryMs(end, smoothMisses) ?: return
-        if (end == SmoothEnd.NotFound || end == SmoothEnd.Unreachable) smoothMisses++
+        if (end != SmoothEnd.Ended) smoothMisses++
         handler.postDelayed({ if (run == smoothRun && target == address) startSmooth(address) }, wait)
     }
 
@@ -154,9 +163,10 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         }
     }
 
-    /** The person asks for smooth mode again after the PC said no: the PC shows its question once more. */
+    /** The person asks for smooth mode again (the PC said no, or they fixed the network): try now, not at the next retry. */
     fun askSmoothAgain() {
         smoothDeclinedBy = null
+        smoothMisses = 0
         target?.let(::startSmooth)
     }
 
@@ -167,8 +177,11 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     private fun stopSmooth() {
         smoothRun++
+        trying?.let { t -> trying = null; io.post { t.close() } } // a meeting still waiting on the PC ends now
         smoothFor = null
         smoothMisses = 0
+        smoothWhy = null
+        smoothAddresses = null
         wifi?.let { w -> io.post { w.close() } }
         wifi = null
         frontChanged(Front.Normal)
@@ -208,7 +221,20 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
 
     /** Back over Wi-Fi once nothing blocks it and nothing is held (else at the release, in smoothLink). */
     private fun backToSmooth() {
-        if (useBluetooth && !bluetoothHere(true, effectiveFront(front, expectingSecure), held != 0 || switching)) useBluetooth = false
+        if (useBluetooth && !bluetoothHere(true, effectiveFront(front, expectingSecure), held != 0 || switching)) {
+            useBluetooth = false
+            releaseBluetooth()
+        }
+    }
+
+    /**
+     * Input just moved from Bluetooth to Wi-Fi: let go of anything the Bluetooth keyboard or mouse still holds (a
+     * button whose release now goes over Wi-Fi, where the PC never saw it pressed).
+     */
+    private fun releaseBluetooth() {
+        if (host == null) return
+        if (outbox.add(Hid.KEYBOARD, Hid.keyboard(0, 0))) drain()
+        if (outbox.add(Hid.MOUSE, Hid.mouse(0, 0, 0))) drain()
     }
 
     /** Input goes over Wi-Fi: smooth mode is on and nothing has it go over Bluetooth for now. */
@@ -422,8 +448,9 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
         val h = hid
         val d = host
         if (h != null && d != null && outbox.isEmpty) {
-            val keys = Hid.keyboard(if (switching) Keymap.ALT else 0, 0)
-            val buttons = Hid.mouse(held, 0, 0)
+            val viaBluetooth = !smoothActive
+            val keys = Hid.keyboard(if (switching && viaBluetooth) Keymap.ALT else 0, 0)
+            val buttons = Hid.mouse(if (viaBluetooth) held else 0, 0, 0)
             io.post { safely { h.sendReport(d, Hid.KEYBOARD, keys) && h.sendReport(d, Hid.MOUSE, buttons) } }
         }
     }
@@ -579,7 +606,7 @@ object Hid {
     /** How often a lost PC is tried again while its screen is open. */
     const val RETRY_MS = 5_000L
     /** How often smooth mode looks for the PC program again while the PC's screen is open. */
-    const val SMOOTH_RETRY_MS = 20_000L
+    const val SMOOTH_RETRY_MS = 10_000L
     /** How long Ctrl+Alt+Del or Lock PC keeps input on Bluetooth before the PC reports the secure screen. */
     const val SECURE_WAIT_MS = 3_000L
     /** Controlled for PC in the Microsoft Store (Partner Center product 9N08NXM529FH). */

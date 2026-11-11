@@ -1,6 +1,6 @@
 # Plan: smooth PC control over Wi-Fi ("Controlled for PC")
 
-Status: approved 2026-11-09.
+Status: approved 2026-11-09. How the phone finds the PC (mDNS, an inbound port) was replaced on 2026-11-10: see [pc-bluetooth-rendezvous.md](pc-bluetooth-rendezvous.md).
 - Step 1 measured: 2500/2500 moves arrived at 8 ms over Wi-Fi.
 - Step 2 (pairing and security) works end to end on Juan's desktop.
 - Bluetooth stays the default everywhere. Smooth mode is an optional add-on, Windows first, Mac/Linux later.

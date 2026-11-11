@@ -60,6 +60,14 @@ interface Strings {
     val smoothOfferBody: String
     val openOnPc: String
     val smoothDeclinedBody: String
+    /** Why smooth mode isn't on, as the PC and this phone found out (SmoothEnd), with the way to fix it. */
+    val smoothNoWifi: String
+    fun smoothOtherNetwork(pc: String, phone: String): String
+    val smoothIsolated: String
+    val smoothPaused: String
+    val smoothBusy: String
+    val smoothInterrupted: String
+    val tryAgain: String
     val askPcAgain: String
     val notNow: String
     val smoothPairTitle: String
@@ -282,10 +290,17 @@ object En : Strings {
     override val pairAgain = "Pair again"
     override val pcSmooth = "Smooth mode · Wi-Fi"
     override val smoothOffer = "Smooth mode"
-    override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: just click Install."
+    override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC, or open it if it's already there. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: click Install, or Open."
     override val openOnPc = "Open on the PC"
     override val smoothDeclinedBody = "The PC didn't allow this phone, so it stays on Bluetooth. To use smooth mode, ask again and click Yes on the PC when it shows the same code as here."
     override val askPcAgain = "Ask the PC again"
+    override val smoothNoWifi = "Smooth mode works over Wi-Fi: turn on this phone's Wi-Fi, on the same network as the PC. Meanwhile, Bluetooth keeps working."
+    override fun smoothOtherNetwork(pc: String, phone: String) = "The PC is on a different network than this phone (PC $pc, this phone $phone), so smooth mode can't reach it. Connect both to the same Wi-Fi: a second router or extender with its own network often causes this, and so does a VPN on either one. Meanwhile, Bluetooth keeps working."
+    override val smoothIsolated = "This phone and the PC are on the same network, but it keeps devices from reaching each other, as guest networks do. Use your main Wi-Fi, or turn off AP isolation in the router. Meanwhile, Bluetooth keeps working."
+    override val smoothPaused = "Smooth mode is paused on this PC. Turn it back on in the Controlled for PC window. Meanwhile, Bluetooth keeps working."
+    override val smoothBusy = "Another phone is using smooth mode on this PC. When it stops, this phone takes over by itself. Meanwhile, Bluetooth keeps working."
+    override val smoothInterrupted = "The PC reached this phone, but smooth mode couldn't finish connecting. It keeps trying by itself. Meanwhile, Bluetooth keeps working."
+    override val tryAgain = "Try again"
     override val notNow = "Not now"
     override val smoothPairTitle = "Allow this phone on the PC"
     override val smoothPairBody = "The PC is asking to allow this phone. Click Yes there if it shows this same code:"
@@ -500,10 +515,17 @@ object Es : Strings {
     override val pairAgain = "Vincular de nuevo"
     override val pcSmooth = "Modo fluido · Wi-Fi"
     override val smoothOffer = "Modo fluido"
-    override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: solo haz clic en Instalar."
+    override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC, o ábrela si ya la tienes. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: haz clic en Instalar, o en Abrir."
     override val openOnPc = "Abrir en el PC"
     override val smoothDeclinedBody = "El PC no permitió este celular, así que sigue por Bluetooth. Para usar el modo fluido, pregunta de nuevo y haz clic en Sí en el PC cuando muestre el mismo código que aquí."
     override val askPcAgain = "Preguntar de nuevo al PC"
+    override val smoothNoWifi = "El modo fluido funciona por Wi-Fi: prende el Wi-Fi de este celular, en la misma red del PC. Mientras tanto, el Bluetooth sigue funcionando."
+    override fun smoothOtherNetwork(pc: String, phone: String) = "El PC está en una red distinta a la de este celular (PC $pc, este celular $phone), así que el modo fluido no lo alcanza. Conecta los dos al mismo Wi-Fi: suele pasar con un segundo router o repetidor que crea su propia red, y también con una VPN en cualquiera de los dos. Mientras tanto, el Bluetooth sigue funcionando."
+    override val smoothIsolated = "Este celular y el PC están en la misma red, pero ella no deja que los equipos se hablen, como pasa en las redes de invitados. Usa tu Wi-Fi principal, o desactiva el aislamiento de AP en el router. Mientras tanto, el Bluetooth sigue funcionando."
+    override val smoothPaused = "El modo fluido está en pausa en este PC. Vuelve a activarlo en la ventana de Controlled for PC. Mientras tanto, el Bluetooth sigue funcionando."
+    override val smoothBusy = "Otro celular está usando el modo fluido en este PC. Cuando termine, este celular lo toma solo. Mientras tanto, el Bluetooth sigue funcionando."
+    override val smoothInterrupted = "El PC llegó a este celular, pero el modo fluido no terminó de conectarse. Sigue intentando solo. Mientras tanto, el Bluetooth sigue funcionando."
+    override val tryAgain = "Intentar de nuevo"
     override val notNow = "Ahora no"
     override val smoothPairTitle = "Permite este celular en el PC"
     override val smoothPairBody = "El PC pide permitir este celular. Haz clic en Sí allá si muestra este mismo código:"

@@ -1,6 +1,5 @@
 //! What the background program and its window share: allowed phones (on disk), pause, who is connected, a pending
 //! pairing. The window is a separate process that reads and changes this over a local-only port (control.rs).
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -41,6 +40,8 @@ fn move_into(old: &Path, new: &Path) {
 
 /// A pairing waiting for the person: the window shows the name and code with Allow and Deny.
 pub struct Ask {
+    /// The phone's public key: one question per phone.
+    pub key: String,
     pub name: String,
     pub code: String,
     pub answer: Sender<bool>,
@@ -49,6 +50,8 @@ pub struct Ask {
 #[derive(Default)]
 pub struct State {
     pub paused: bool,
+    /// Bluetooth is off here, or this PC has none (bt.rs keeps trying).
+    pub no_bluetooth: bool,
     /// The phone sending input right now.
     pub connected: Option<String>,
     pub ask: Option<Ask>,
@@ -63,6 +66,7 @@ impl State {
             if let Some((s, _)) = self.session.take() {
                 let _ = s.shutdown(std::net::Shutdown::Both);
             }
+            self.connected = None; // the window stops saying "Connected" now, not when the session's thread notices
         }
     }
 }
@@ -90,25 +94,54 @@ pub fn is_allowed(key: &str) -> bool {
     phones().iter().any(|(k, _)| k == key)
 }
 
-pub fn allow(key: &str, name: &str) {
-    if is_allowed(key) {
+/// One change to the phones file at a time (pairing, renaming and removing run on different threads).
+static PHONES: Mutex<()> = Mutex::new(());
+
+/// Writes the whole list to a new file, then puts it in place, so a reader never sees it half-written or empty.
+fn save(list: &[(String, String)]) {
+    let text: String = list.iter().map(|(k, n)| format!("{k}\t{n}\n")).collect();
+    let tmp = phones_path().with_extension("tmp");
+    if std::fs::write(&tmp, &text).is_err() {
         return;
     }
-    let name = unique(&phones(), key, name);
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(phones_path()).expect("phones file");
-    let _ = writeln!(f, "{key}\t{name}");
+    // Another program (an antivirus scan) may hold the file a moment: try again, and at worst write it in place
+    // rather than lose an allowed or removed phone.
+    for _ in 0..5 {
+        if std::fs::rename(&tmp, phones_path()).is_ok() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let _ = std::fs::write(phones_path(), text);
+    let _ = std::fs::remove_file(&tmp);
+}
+
+pub fn allow(key: &str, name: &str) {
+    let _lock = PHONES.lock().unwrap();
+    let mut list = phones();
+    if list.iter().any(|(k, _)| k == key) {
+        return;
+    }
+    let name = unique(&list, key, name);
+    list.push((key.to_owned(), name));
+    save(&list);
 }
 
 /// A known phone that now gives a friendlier name (phones before 1.19 sent their model code, "2412DPC0AG"): keep it.
 pub fn rename(key: &str, name: &str) {
-    let list = phones();
+    let _lock = PHONES.lock().unwrap();
+    let mut list = phones();
     let Some((_, old)) = list.iter().find(|(k, _)| k == key) else { return };
     let new = unique(&list, key, name);
     if *old == new {
         return;
     }
-    let kept: String = list.iter().map(|(k, n)| format!("{k}\t{}\n", if k == key { &new } else { n })).collect();
-    let _ = std::fs::write(phones_path(), kept);
+    for (k, n) in list.iter_mut() {
+        if k == key {
+            *n = new.clone();
+        }
+    }
+    save(&list);
 }
 
 /// [name] for [key] in [list], numbered when another phone already has it: two of the same model, or the dev app on
@@ -122,8 +155,9 @@ fn unique(list: &[(String, String)], key: &str, name: &str) -> String {
 }
 
 pub fn remove(key: &str) {
-    let kept: String = phones().into_iter().filter(|(k, _)| k != key).map(|(k, n)| format!("{k}\t{n}\n")).collect();
-    let _ = std::fs::write(phones_path(), kept);
+    let _lock = PHONES.lock().unwrap();
+    let kept: Vec<_> = phones().into_iter().filter(|(k, _)| k != key).collect();
+    save(&kept);
 }
 
 #[cfg(test)]

@@ -64,8 +64,9 @@ pub fn json(s: &Option<Status>) -> String {
     let Some(s) = s else { return "null".into() };
     let phones: Vec<String> = s.phones.iter().map(|(k, n)| format!("[{},{}]", json_str(k), json_str(n))).collect();
     format!(
-        "{{\"paused\":{},\"connected\":{},\"ask\":{},\"phones\":[{}],\"version\":{}}}",
+        "{{\"paused\":{},\"noBluetooth\":{},\"connected\":{},\"ask\":{},\"phones\":[{}],\"version\":{}}}",
         s.paused,
+        s.no_bluetooth,
         s.connected.as_deref().map(json_str).unwrap_or("null".into()),
         s.ask.as_ref().map(|(c, n)| format!("[{},{}]", json_str(c), json_str(n))).unwrap_or("null".into()),
         phones.join(","),
@@ -121,7 +122,7 @@ mod tests {
 
     #[test]
     fn status_json_escapes_names() {
-        let s = Status { paused: false, connected: Some("Ana's \"POCO\"".into()), ask: None, phones: vec![("ab".into(), "x\\y".into())] };
+        let s = Status { paused: false, no_bluetooth: false, connected: Some("Ana's \"POCO\"".into()), ask: None, phones: vec![("ab".into(), "x\\y".into())] };
         let j = json(&Some(s));
         assert!(j.contains(r#""connected":"Ana's \"POCO\"""#));
         assert!(j.contains(r#"["ab","x\\y"]"#));

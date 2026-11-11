@@ -1,23 +1,22 @@
-//! Smooth mode's network side: mDNS so the phone finds this PC, the TCP hello and pairing, sealed events over TCP and
-//! sealed moves over UDP. Only the phone of the current session moves this PC, and only while not paused.
+//! Smooth mode's connection (docs/plans/pc-bluetooth-rendezvous.md). The phone, already paired with this PC, opens
+//! Controlled's Bluetooth channel (bt.rs): the hello and, the first time, the 6-digit code go there. The phone then
+//! says where it listens on Wi-Fi, and this PC dials it: sealed events over that TCP connection, sealed moves over UDP
+//! this PC opens too. Everything starts from this PC, so no port here is open to the network and no firewall rule is
+//! needed, on any network. Only the phone of the current session moves this PC, and only while not paused.
 use crate::state::{self, Ask, Shared};
-use crate::{crypto, input};
+use crate::{bt, crypto, input};
 use enigo::{Enigo, Settings};
 use p256::SecretKey;
 use std::io::{Read, Write};
-use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub const PORT: u16 = 47805;
 /// How long a session goes without writing to the phone before it sends the heartbeat.
 const HEARTBEAT: Duration = Duration::from_secs(2);
-
-struct Session {
-    phone: IpAddr,
-    keys: crypto::Keys,
-    last_udp: u64,
-}
+/// How long dialing the phone over Wi-Fi may take before this PC tells it why not.
+const DIAL: Duration = Duration::from_secs(3);
 
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
@@ -35,7 +34,7 @@ fn load_key() -> SecretKey {
     k
 }
 
-fn read_frame(s: &mut TcpStream) -> Option<Vec<u8>> {
+fn read_frame(s: &mut impl Read) -> Option<Vec<u8>> {
     let mut len = [0u8; 2];
     s.read_exact(&mut len).ok()?;
     let mut buf = vec![0u8; u16::from_be_bytes(len) as usize];
@@ -43,13 +42,15 @@ fn read_frame(s: &mut TcpStream) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-fn write_frame(s: &mut TcpStream, b: &[u8]) -> bool {
-    s.write_all(&(b.len() as u16).to_be_bytes()).is_ok() && s.write_all(b).is_ok()
+fn write_frame(s: &mut impl Write, b: &[u8]) -> bool {
+    let mut f = (b.len() as u16).to_be_bytes().to_vec();
+    f.extend_from_slice(b);
+    s.write_all(&f).is_ok() // one write: an RFCOMM send per frame
 }
 
-/// Phone's hello: 'H', version 1, its public key, its nonce, then its name (UTF-8, rest of the frame).
+/// Phone's hello: 'H', version 2, its public key, its nonce, then its name (UTF-8, rest of the frame).
 pub fn parse_hello(f: &[u8]) -> Option<(&[u8], &[u8], String)> {
-    if f.len() < 2 + crypto::PUB_LEN + crypto::NONCE_LEN || f[0] != b'H' || f[1] != 1 {
+    if f.len() < 2 + crypto::PUB_LEN + crypto::NONCE_LEN || f[0] != b'H' || f[1] != 2 {
         return None;
     }
     let pub_end = 2 + crypto::PUB_LEN;
@@ -57,61 +58,172 @@ pub fn parse_hello(f: &[u8]) -> Option<(&[u8], &[u8], String)> {
     Some((&f[2..pub_end], &f[pub_end..nonce_end], String::from_utf8_lossy(&f[nonce_end..]).chars().take(40).collect()))
 }
 
-fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Option<Session>>, enigo: &Mutex<Enigo>, show: &dyn Fn()) {
-    if shared.lock().unwrap().paused {
-        return; // paused: the phone stays on Bluetooth
+/// Where the phone waits for this PC: 'W', its TCP port, its UDP port, then each of its IPv4 addresses (Wi-Fi first;
+/// also its hotspot or Ethernet, if any), 1 to 8 of them.
+pub fn parse_where(w: &[u8]) -> Option<(u16, u16, Vec<Ipv4Addr>)> {
+    if w.len() < 9 || w.len() > 5 + 4 * 8 || (w.len() - 5) % 4 != 0 || w[0] != b'W' {
+        return None;
     }
-    let phone_ip = match s.peer_addr() { Ok(a) => a.ip(), Err(_) => return };
-    let _ = s.set_read_timeout(Some(Duration::from_secs(90)));
-    let Some(hello) = read_frame(&mut s) else { return };
+    let ips = w[5..].chunks(4).map(|c| Ipv4Addr::new(c[0], c[1], c[2], c[3])).collect();
+    Some((u16::from_be_bytes([w[1], w[2]]), u16::from_be_bytes([w[3], w[4]]), ips))
+}
+
+/// Dials all of the phone's addresses at once; the first that answers wins.
+fn dial(ips: &[Ipv4Addr], port: u16) -> Option<TcpStream> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    for ip in ips {
+        let (tx, to) = (tx.clone(), SocketAddr::from((*ip, port)));
+        std::thread::spawn(move || {
+            let _ = tx.send(TcpStream::connect_timeout(&to, DIAL).ok());
+        });
+    }
+    drop(tx);
+    rx.iter().flatten().next()
+}
+
+/// The address this PC reaches [to] from, as Windows' routing picks it (0.0.0.0 when it has no way there): the phone
+/// compares it with its own to say why smooth mode can't connect.
+fn route_from(to: SocketAddr) -> [u8; 4] {
+    let from = UdpSocket::bind("0.0.0.0:0").and_then(|u| u.connect(to).and_then(|_| u.local_addr()));
+    match from.map(|a| a.ip()) {
+        Ok(std::net::IpAddr::V4(ip)) => ip.octets(),
+        _ => [0; 4],
+    }
+}
+
+/// One phone, from its Bluetooth hello to the end of its session. The counters of each direction run across the
+/// Bluetooth and Wi-Fi legs: PC to phone OK (or NO, or F) is 1, the Wi-Fi proof 2, then 'E' frames; phone to PC 'W'
+/// is 2, then its events.
+fn handle(mut bt: bt::Stream, key: &SecretKey, shared: &Shared, enigo: &Arc<Mutex<Enigo>>, show: &dyn Fn()) {
+    bt.set_read_timeout(Some(Duration::from_secs(10)));
+    let Some(hello) = read_frame(&mut bt) else { return };
     let Some((phone_pub, phone_nonce, name)) = parse_hello(&hello) else { return };
     let phone_key = hex(phone_pub);
+    // Said plainly, before any keys, so the phone tells the person instead of retrying in silence: paused here ('Z'),
+    // or another phone has smooth mode right now ('B'; the same phone coming back replaces its own stale session).
     let pc_pub = crypto::public_bytes(key);
     let pc_nonce: [u8; crypto::NONCE_LEN] = rand::random();
     let known = state::is_allowed(&phone_key);
+    let code = crypto::code(phone_pub, &pc_pub, phone_nonce, &pc_nonce);
+    let (tx, rx) = std::sync::mpsc::channel();
+    // The check and, for a new phone, taking the pairing question, under one lock: two phones arriving together
+    // can't both pass. The same phone asking again (it left the PC's screen and came back) replaces its own question.
+    let refusal = {
+        let mut st = shared.lock().unwrap();
+        let other = |k: &String| *k != phone_key;
+        if st.paused {
+            Some(b'Z')
+        } else if st.session.as_ref().is_some_and(|(_, k)| other(k)) || st.ask.as_ref().is_some_and(|a| other(&a.key)) {
+            Some(b'B') // another phone has smooth mode, or is being allowed right now
+        } else {
+            if !known {
+                st.ask = Some(Ask { key: phone_key.clone(), name: name.clone(), code: code.clone(), answer: tx });
+            }
+            None
+        }
+    };
+    if let Some(r) = refusal {
+        let _ = write_frame(&mut bt, &[r]);
+        return;
+    }
     if known {
         state::rename(&phone_key, &name);
     }
-    let mut reply = vec![b'H', 1];
+    let mut reply = vec![b'H', 2];
     reply.extend_from_slice(&pc_pub);
     reply.extend_from_slice(&pc_nonce);
     reply.push(known as u8);
     reply.extend_from_slice(hostname::get().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default().as_bytes());
-    if !write_frame(&mut s, &reply) {
+    let clear_ask = || {
+        let mut st = shared.lock().unwrap();
+        if st.ask.as_ref().is_some_and(|a| a.code == code) {
+            st.ask = None; // only this question: a newer one stays on screen
+        }
+    };
+    let keys = crypto::keys(key, phone_pub, phone_nonce, &pc_nonce);
+    if !write_frame(&mut bt, &reply) || keys.is_none() {
+        clear_ask();
         return;
     }
-    let Some(keys) = crypto::keys(key, phone_pub, phone_nonce, &pc_nonce) else { return };
+    let keys = keys.unwrap();
     if !known {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let code = crypto::code(phone_pub, &pc_pub, phone_nonce, &pc_nonce);
-        shared.lock().unwrap().ask = Some(Ask { name: name.clone(), code, answer: tx });
         show();
-        let allowed = rx.recv_timeout(Duration::from_secs(85)).unwrap_or(false);
-        shared.lock().unwrap().ask = None;
+        // Up to 85 s for the person; a phone that leaves meanwhile (closes the channel) takes its question with it.
+        let mut allowed = false;
+        for _ in 0..85 {
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(yes) => {
+                    allowed = yes;
+                    break;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !bt.closed() => {}
+                Err(_) => break, // the phone left, or a newer question from it took this one's place
+            }
+        }
+        clear_ask();
         if !allowed {
-            let _ = write_frame(&mut s, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"NO"));
+            let _ = write_frame(&mut bt, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"NO"));
             return;
         }
         state::allow(&phone_key, &name);
     }
-    if !write_frame(&mut s, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"OK")) {
+    if !write_frame(&mut bt, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"OK")) {
         return;
     }
-    let _ = s.set_read_timeout(None);
+    let Some((mut last, (tcp_port, udp_port, ips))) =
+        read_frame(&mut bt).and_then(|f| crypto::open(&keys.to_pc, crypto::TCP, &f)).and_then(|(n, w)| Some((n, parse_where(&w)?)))
+    else {
+        return;
+    };
+    let Some(mut s) = dial(&ips, tcp_port) else {
+        // Can't reach it: say from where, so the phone tells the person what's wrong (another network, a VPN, or one
+        // that keeps devices apart) instead of staying silent.
+        let mut f = vec![b'F'];
+        f.extend_from_slice(&route_from((ips[0], tcp_port).into()));
+        let _ = write_frame(&mut bt, &crypto::seal(&keys.to_phone, crypto::TCP, 2, &f));
+        return;
+    };
+    drop(bt); // met: everything else goes over Wi-Fi
+    let _ = s.set_nodelay(true);
+    // The phone's moves come from the address that answered: Windows lets in only what answers this PC's own packets.
+    let Some(udp) = s.peer_addr().ok().and_then(|phone| UdpSocket::bind("0.0.0.0:0").and_then(|u| u.connect((phone.ip(), udp_port)).map(|_| u)).ok())
+    else {
+        return;
+    };
+    // The proof this is the PC the phone met over Bluetooth, then the first UDP packet, which lets the phone's moves in
+    // (Windows lets in what answers a packet this PC sent).
+    if !write_frame(&mut s, &crypto::seal(&keys.to_phone, crypto::TCP, 2, b"P")) || udp.send(&crypto::seal(&keys.to_phone, crypto::UDP, 1, b"U")).is_err() {
+        return;
+    }
     {
         let mut st = shared.lock().unwrap();
+        // Paused, or this phone removed, while it was meeting this PC: no session.
+        if st.paused || !state::is_allowed(&phone_key) {
+            return;
+        }
+        st.end_session(None); // one phone at a time: this one (another phone was refused at its hello)
         st.connected = Some(name.clone());
         st.session = s.try_clone().ok().map(|c| (c, phone_key.clone()));
     }
-    let to_phone = keys.to_phone.clone();
-    *session.lock().unwrap() = Some(Session { phone: phone_ip, keys: crypto::Keys { to_pc: keys.to_pc.clone(), to_phone: keys.to_phone }, last_udp: 0 });
-    if let Ok(mut out) = s.try_clone() {
-        std::thread::spawn(move || tell_phone(&mut out, &to_phone));
+    let done = Arc::new(AtomicBool::new(false));
+    if let (Ok(mut out), Ok(beat)) = (s.try_clone(), udp.try_clone()) {
+        let to_phone = keys.to_phone.clone();
+        std::thread::spawn(move || tell_phone(&mut out, &to_phone, &beat));
     }
-    let mut last = 0u64;
+    {
+        let (to_pc, enigo, done, shared) = (keys.to_pc.clone(), enigo.clone(), done.clone(), shared.clone());
+        let _ = udp.set_read_timeout(Some(Duration::from_secs(1)));
+        std::thread::spawn(move || moves(&udp, &to_pc, &enigo, &done, &shared));
+    }
     let mut held = input::Input::default();
+    // The phone sends an empty frame every 2 s when idle: three missed and it's gone (asleep, off the Wi-Fi), so
+    // anything it held is let go within seconds, not when TCP gives up minutes later.
+    let _ = s.set_read_timeout(Some(HEARTBEAT * 3));
     // Pausing or removing this phone in the window shuts the socket down, which ends this loop.
     while let Some(f) = read_frame(&mut s) {
+        if f.is_empty() {
+            continue; // the phone's heartbeat
+        }
         let Some((n, e)) = crypto::open(&keys.to_pc, crypto::TCP, &f) else { break };
         if n <= last {
             break; // replayed or reordered on a reliable channel: drop the session
@@ -122,13 +234,32 @@ fn handle(mut s: TcpStream, key: &SecretKey, shared: &Shared, session: &Mutex<Op
     }
     // Never leave a key or button held on this PC when the phone goes.
     input::run(&mut enigo.lock().unwrap(), held.release_all());
+    done.store(true, Ordering::Relaxed);
     let _ = s.shutdown(std::net::Shutdown::Both); // ends the heartbeat, which holds a clone of this socket
-    let mut cur = session.lock().unwrap();
-    if cur.as_ref().is_some_and(|c| c.phone == phone_ip) {
-        *cur = None;
-        let mut st = shared.lock().unwrap();
+    let mut st = shared.lock().unwrap();
+    if st.session.as_ref().is_some_and(|(c, _)| c.local_addr().ok() == s.local_addr().ok()) {
         st.connected = None;
         st.session = None;
+    }
+}
+
+/// The session's moves and scroll: sealed UDP from the phone, on a socket connected to it, so nothing else gets in.
+fn moves(udp: &UdpSocket, to_pc: &aes_gcm::Aes256Gcm, enigo: &Mutex<Enigo>, done: &AtomicBool, shared: &Shared) {
+    let (mut buf, mut last) = ([0u8; 512], 0u64);
+    while !done.load(Ordering::Relaxed) {
+        let Ok(n) = udp.recv(&mut buf) else { continue }; // a timeout, to look at `done` again
+        if shared.lock().unwrap().paused {
+            continue;
+        }
+        let Some((counter, e)) = crypto::open(to_pc, crypto::UDP, &buf[..n]) else { continue };
+        if counter <= last {
+            continue; // late or replayed: the next move carries the motion
+        }
+        last = counter;
+        if matches!(e.first(), Some(b'M') | Some(b'S')) {
+            let actions = input::Input::default().actions(&e);
+            input::run(&mut enigo.lock().unwrap(), actions);
+        }
     }
 }
 
@@ -174,10 +305,13 @@ fn watch_front() {
 
 /// The only writer to the phone once allowed, so frames never interleave: "E0"/"E1"/"E2" when what's in front changes
 /// (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
-/// [HEARTBEAT] without anything else. Ends when the socket closes.
-fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
-    let (mut counter, mut told) = (1u64, NORMAL);
+/// [HEARTBEAT] without anything else, plus a UDP one that keeps Windows letting the phone's moves in. Ends when the
+/// socket closes.
+fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm, udp: &UdpSocket) {
+    let (mut counter, mut told, mut beats) = (2u64, NORMAL, 1u64); // 2: the Wi-Fi proof's
     loop {
+        beats += 1;
+        let _ = udp.send(&crypto::seal(to_phone, crypto::UDP, beats, b"U"));
         let now = {
             let guard = FRONT.0.lock().unwrap();
             *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |front| *front == told).unwrap().0
@@ -190,6 +324,7 @@ fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm) {
             Vec::new()
         };
         if !write_frame(out, &frame) {
+            let _ = out.shutdown(std::net::Shutdown::Both); // the phone is gone: end the session now
             return;
         }
     }
@@ -228,72 +363,40 @@ fn front() -> u8 {
     }
 }
 
-fn advertise() -> Option<mdns_sd::ServiceDaemon> {
-    let mdns = mdns_sd::ServiceDaemon::new().ok()?;
-    let host = hostname::get().ok()?.to_string_lossy().into_owned();
-    let info = mdns_sd::ServiceInfo::new("_controlled._tcp.local.", &host, &format!("{host}.local."), "", PORT, None)
-        .ok()?
-        .enable_addr_auto();
-    mdns.register(info).ok()?;
-    Some(mdns)
-}
-
-/// Starts the network side in background threads. `show` opens the window (for a pairing to allow).
-pub fn start(udps: Vec<UdpSocket>, listeners: Vec<TcpListener>, shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
+/// Starts smooth mode's side in background threads. `show` opens the window (for a pairing to allow).
+pub fn start(shared: Shared, show: Arc<dyn Fn() + Send + Sync>) {
     let key = Arc::new(load_key());
-    let session: Arc<Mutex<Option<Session>>> = Arc::new(Mutex::new(None));
     let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).expect("input injection unavailable")));
-    std::mem::forget(advertise()); // lives as long as the program
     watch_front();
-    for udp in udps {
-        let (session, enigo, shared) = (session.clone(), enigo.clone(), shared.clone());
-        std::thread::spawn(move || {
-            let mut buf = [0u8; 512];
-            loop {
-                let Ok((n, from)) = udp.recv_from(&mut buf) else { continue };
-                if shared.lock().unwrap().paused {
-                    continue;
-                }
-                let mut cur = session.lock().unwrap();
-                let Some(s) = cur.as_mut().filter(|s| s.phone == from.ip()) else { continue };
-                let Some((counter, e)) = crypto::open(&s.keys.to_pc, crypto::UDP, &buf[..n]) else { continue };
-                if counter <= s.last_udp {
-                    continue; // late or replayed: the next move carries the motion
-                }
-                s.last_udp = counter;
-                drop(cur);
-                if matches!(e.first(), Some(b'M') | Some(b'S')) {
-                    let actions = input::Input::default().actions(&e);
-                    input::run(&mut enigo.lock().unwrap(), actions);
-                }
-            }
-        });
-    }
-    for listener in listeners {
-        let (key, shared, session, enigo, show) = (key.clone(), shared.clone(), session.clone(), enigo.clone(), show.clone());
-        std::thread::spawn(move || {
-            for s in listener.incoming().flatten() {
-                let (key, shared, session, enigo, show) = (key.clone(), shared.clone(), session.clone(), enigo.clone(), show.clone());
-                std::thread::spawn(move || handle(s, &key, &shared, &session, &enigo, &*show));
-            }
-        });
-    }
+    let radio = shared.clone();
+    bt::serve(move |s| handle(s, &key, &shared, &enigo, &*show), move |on| radio.lock().unwrap().no_bluetooth = !on);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_hello;
+    use super::{parse_hello, parse_where};
 
     #[test]
     fn hello_needs_the_whole_header() {
-        let mut f = vec![b'H', 1];
+        let mut f = vec![b'H', 2];
         f.extend_from_slice(&[4u8; 65]);
         f.extend_from_slice(&[9u8; 16]);
         f.extend_from_slice("Pixel".as_bytes());
         let (p, n, name) = parse_hello(&f).unwrap();
         assert_eq!((p.len(), n.len(), name.as_str()), (65, 16, "Pixel"));
         assert!(parse_hello(&f[..80]).is_none());
-        f[1] = 2;
+        f[1] = 1; // a phone from before the Bluetooth meeting
         assert!(parse_hello(&f).is_none());
+    }
+
+    #[test]
+    fn where_the_phone_waits() {
+        let (tcp, udp, ips) = parse_where(&[b'W', 0xB0, 0x9D, 0xAA, 0x42, 192, 168, 0, 23, 10, 0, 0, 5]).unwrap();
+        assert_eq!((tcp, udp), (45213, 43586));
+        assert_eq!(ips, vec![std::net::Ipv4Addr::new(192, 168, 0, 23), std::net::Ipv4Addr::new(10, 0, 0, 5)]);
+        assert!(parse_where(&[b'W', 0, 1, 0, 2]).is_none(), "no address");
+        assert!(parse_where(&[b'W', 0, 1, 0, 2, 1, 2, 3]).is_none(), "a cut address");
+        assert!(parse_where(&[b'X', 0, 1, 0, 2, 192, 168, 0, 23]).is_none());
+        assert!(parse_where(&[[b'W', 0, 1, 0, 2].as_slice(), &[1u8; 36]].concat()).is_none(), "more than 8");
     }
 }

@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
         }
         // Reconnect test: --es tv_ip <wrong ip> makes the TV look moved, so the loop has to find it again (no router needed).
         if (BuildConfig.LOG) intent?.getStringExtra("tv_ip")?.let(model::devMoveTv)
-        // Smooth-mode prototype: --es wifi_mouse <pc ip> (WifiMouse).
+        // Smooth-mode test driver: --es wifi_mouse <PC Bluetooth address> (WifiMouse).
         if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)

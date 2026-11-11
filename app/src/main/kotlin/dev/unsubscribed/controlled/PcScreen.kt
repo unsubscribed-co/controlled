@@ -158,15 +158,28 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     SnackbarHost(snack, Modifier.align(Alignment.BottomCenter))
     }
     val declined = pc != null && hid.smoothDeclinedBy == pc.address
+    // The network's own reasons, told plainly with the fix; else the program isn't there yet (install or open it).
+    val why = when (hid.smoothWhy) {
+        SmoothEnd.NoWifi -> t.smoothNoWifi
+        SmoothEnd.OtherNetwork -> hid.smoothAddresses.let { t.smoothOtherNetwork(it?.first ?: "?", it?.second ?: "?") }
+        SmoothEnd.Isolated -> t.smoothIsolated
+        SmoothEnd.Paused -> t.smoothPaused
+        SmoothEnd.Busy -> t.smoothBusy
+        SmoothEnd.Interrupted -> t.smoothInterrupted
+        else -> null
+    }
     if (offering) AlertDialog(
         onDismissRequest = { offering = false },
         confirmButton = {
-            if (declined) TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.askPcAgain) }
-            else TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) }
+            when {
+                declined -> TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.askPcAgain) }
+                why != null -> TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.tryAgain) }
+                else -> TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) }
+            }
         },
         dismissButton = { TextButton({ offering = false }) { Text(t.notNow) } },
         title = { Text(t.smoothOffer) },
-        text = { Text(if (declined) t.smoothDeclinedBody else t.smoothOfferBody) },
+        text = { Text(if (declined) t.smoothDeclinedBody else why ?: t.smoothOfferBody) },
     )
     // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
     hid.smoothCode?.let { code ->

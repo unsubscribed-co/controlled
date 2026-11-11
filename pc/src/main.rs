@@ -1,8 +1,10 @@
-//! Controlled for PC: smooth mode's receiver (docs/plans/pc-wifi.md). The phone finds it by mDNS, pairs once with a
-//! 6-digit code shown on both screens, then sends input over Wi-Fi, sealed (crypto.rs, server.rs). A tray icon shows
+//! Controlled for PC: smooth mode's receiver (docs/plans/pc-bluetooth-rendezvous.md). The phone, paired with this PC,
+//! opens its Bluetooth channel (bt.rs), pairs once with a 6-digit code shown on both screens, then this PC dials it
+//! over Wi-Fi and input comes sealed (crypto.rs, server.rs). A tray icon shows
 //! when a phone has control (tray.rs); the window (ui.rs, its own process) shows status, allowed phones and pause.
 // No console window: it runs in the background, started with Windows (MSIX startup task).
 #![cfg_attr(not(test), windows_subsystem = "windows")]
+mod bt;
 mod control;
 mod crypto;
 mod input;
@@ -11,7 +13,7 @@ mod state;
 mod tray;
 mod ui;
 
-use std::net::{TcpListener, UdpSocket};
+use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 
@@ -34,7 +36,8 @@ fn main() {
     if std::env::args().any(|a| a == "--window") {
         return ui::run();
     }
-    let (Ok(udp), Ok(listener)) = (UdpSocket::bind(("0.0.0.0", server::PORT)), TcpListener::bind(("0.0.0.0", server::PORT))) else {
+    // The window's local port doubles as the one-copy lock.
+    let Ok(control) = TcpListener::bind(("127.0.0.1", control::PORT)) else {
         // Already running (started with Windows, then opened from the Start menu): open its window instead.
         spawn_window();
         return;
@@ -49,11 +52,8 @@ fn main() {
         }
         *w = spawn_window();
     });
-    // IPv6 too, next to IPv4 (on Windows an IPv6 socket doesn't take IPv4): optional, the network may not have it.
-    let udps = [Some(udp), UdpSocket::bind(("::", server::PORT)).ok()].into_iter().flatten().collect();
-    let listeners = [Some(listener), TcpListener::bind(("::", server::PORT)).ok()].into_iter().flatten().collect();
-    server::start(udps, listeners, shared.clone(), show.clone());
-    control::start(shared.clone());
+    server::start(shared.clone(), show.clone());
+    control::start(control, shared.clone());
     // Opened from Start or the Store: show the window (1.0.0 only did on its very first run, and an old marker left
     // by an uninstall kept it in the tray). Started by Windows at sign-in: stay in the tray.
     if !started_at_sign_in() {

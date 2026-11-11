@@ -33,18 +33,8 @@
       </Extensions>
     </Application>
   </Applications>
-  <Extensions>
-    <!-- The phone reaches it on the home Wi-Fi only (private networks): TCP and UDP 47805, plus mDNS to be found. -->
-    <desktop2:Extension Category="windows.firewallRules">
-      <desktop2:FirewallRules Executable="controlled-pc.exe">
-        <desktop2:Rule Direction="in" IPProtocol="TCP" LocalPortMin="47805" LocalPortMax="47805" Profile="private" />
-        <desktop2:Rule Direction="in" IPProtocol="UDP" LocalPortMin="47805" LocalPortMax="47805" Profile="private" />
-        <desktop2:Rule Direction="in" IPProtocol="UDP" LocalPortMin="5353" LocalPortMax="5353" Profile="private" />
-      </desktop2:FirewallRules>
-    </desktop2:Extension>
-  </Extensions>
+  <!-- No firewall rules: the phone meets this PC over Bluetooth and this PC dials it, so nothing comes in unasked. -->
   <Capabilities>
-    <Capability Name="privateNetworkClientServer" />
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 </Package>
