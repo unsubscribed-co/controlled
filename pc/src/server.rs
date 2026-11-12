@@ -265,6 +265,9 @@ const SECURE: u8 = b'2';
 /// notices ([watch_front]); the condvar wakes each session's writer when it changes.
 static FRONT: (std::sync::Mutex<u8>, std::sync::Condvar) = (std::sync::Mutex::new(NORMAL), std::sync::Condvar::new());
 
+/// The clipboard's change count as the timer last saw it ([watch_front]).
+static CLIP_SEEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 fn front_changed() {
     let now = front();
     let mut current = FRONT.0.lock().unwrap();
@@ -294,6 +297,11 @@ fn watch_front() {
         while GetMessageW(&mut msg, 0, 0, 0) > 0 {
             if msg.message == WM_TIMER {
                 front_changed();
+                // A copy on this PC wakes the sessions too, so the phone gets it within a quarter second.
+                let now = crate::clip::changes();
+                if CLIP_SEEN.swap(now, std::sync::atomic::Ordering::Relaxed) != now {
+                    FRONT.1.notify_all();
+                }
             }
             DispatchMessageW(&msg);
         }
@@ -301,12 +309,13 @@ fn watch_front() {
 }
 
 /// The only writer to the phone once allowed, so frames never interleave: first "C1" (paste and erase are understood),
-/// then "E0"/"E1"/"E2" when what's in front changes
+/// then "E0"/"E1"/"E2" when what's in front changes, "K" and the text when the person copies text here ([clip::copied])
 /// (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
 /// [HEARTBEAT] without anything else, plus a UDP one that keeps Windows letting the phone's moves in. Ends when the
 /// socket closes.
 fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm, udp: &UdpSocket) {
     let (mut counter, mut told, mut beats) = (2u64, NORMAL, 1u64); // 2: the Wi-Fi proof's
+    let mut copies = crate::clip::changes(); // what was copied before the phone came stays here
     // What this PC takes beyond keys and text: 1 = paste and erase. A phone that never hears it types and deletes key by key.
     counter += 1;
     if !write_frame(out, &crypto::seal(to_phone, crypto::TCP, counter, &[b'C', 1])) {
@@ -317,12 +326,22 @@ fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm, udp: &UdpSocke
         let _ = udp.send(&crypto::seal(to_phone, crypto::UDP, beats, b"U"));
         let now = {
             let guard = FRONT.0.lock().unwrap();
-            *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |front| *front == told).unwrap().0
+            *FRONT.1.wait_timeout_while(guard, HEARTBEAT, |front| *front == told && crate::clip::changes() == copies).unwrap().0
         };
+        let copied = crate::clip::changes();
         let frame = if now != told {
             told = now;
             counter += 1;
             crypto::seal(to_phone, crypto::TCP, counter, &[b'E', now])
+        } else if copied != copies {
+            copies = copied;
+            match crate::clip::copied() {
+                Some(t) => {
+                    counter += 1;
+                    crypto::seal(to_phone, crypto::TCP, counter, &[&[b'K'][..], t.as_bytes()].concat())
+                }
+                None => Vec::new(),
+            }
         } else {
             Vec::new()
         };

@@ -1,6 +1,8 @@
 <en-US>
-- "Your controls" now ends with a quiet line on who makes Controlled and why it's free, with links to Unsubscribed!, the source code and privacy, for both TV and PC.
+- PC: text you copy on the PC while you control it lands on your phone's clipboard, ready to paste (Controlled for PC 1.0.7).
+- Allowing this phone on a PC: the code shows above the trackpad instead of covering it, so you can click Yes on the PC from the phone.
 </en-US>
 <es-419>
-- "Tus controles" termina con una línea discreta sobre quién hace Controlled y por qué es gratis, con enlaces a Unsubscribed!, al código fuente y a privacidad, para TV y PC.
+- PC: el texto que copias en el PC mientras lo controlas llega al portapapeles de tu celular, listo para pegar (Controlled for PC 1.0.7).
+- Al permitir este celular en un PC, el código aparece encima del trackpad en vez de taparlo, así puedes hacer clic en Sí en el PC desde el celular.
 </es-419>

@@ -2,7 +2,7 @@
 //! the cloud clipboard, and [paste] puts back what was there right after: a password pasted from the phone isn't kept
 //! on this PC, and what the person had copied isn't lost.
 use windows_sys::Win32::Foundation::{GlobalFree, HGLOBAL};
-use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW, SetClipboardData};
+use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData};
 use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
 
 const CF_UNICODETEXT: u32 = 13;
@@ -86,6 +86,17 @@ pub fn text() -> Option<String> {
         CloseClipboard();
         text
     }
+}
+
+/// Text the person copied, for the phone: not what a password manager or this program's own paste marked as
+/// private (Windows' ExcludeClipboardContentFromMonitorProcessing), not empty, and small enough for one frame.
+pub fn copied() -> Option<String> {
+    // shortcut: longer copies aren't sent (one frame is 64 KB); send them in pieces if anyone copies more.
+    const MAX: usize = 60_000;
+    if unsafe { IsClipboardFormatAvailable(format("ExcludeClipboardContentFromMonitorProcessing")) } != 0 {
+        return None;
+    }
+    text().filter(|t| !t.is_empty() && t.len() <= MAX)
 }
 
 /// Empties the clipboard.

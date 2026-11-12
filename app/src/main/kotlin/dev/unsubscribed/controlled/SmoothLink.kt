@@ -267,7 +267,7 @@ class SmoothLink(context: Context) {
      * Blocks until the PC closes the connection, it breaks, or the heartbeat (an empty frame every 2 s) stops: a PC
      * asleep or off the network sends no goodbye.
      */
-    fun awaitClose(onFront: (Front) -> Unit) {
+    fun awaitClose(onFront: (Front) -> Unit, onCopied: (String) -> Unit) {
         val s = tcp ?: return
         runCatching {
             val input = DataInputStream(s.getInputStream())
@@ -284,6 +284,8 @@ class SmoothLink(context: Context) {
                 if (e.size == 2 && e[0] == 'E'.code.toByte()) Front.entries.getOrNull(e[1] - '0'.code.toByte())?.let(onFront)
                 // What the PC takes beyond keys and text: 1 = paste and erase (PC 1.0.6+).
                 if (e.size == 2 && e[0] == 'C'.code.toByte()) canPaste = e[1] >= 1
+                // Text the person copied on the PC (PC 1.0.7+), for this phone's clipboard.
+                if (e.size > 1 && e[0] == 'K'.code.toByte()) onCopied(String(e, 1, e.size - 1, Charsets.UTF_8))
             }
         }
     }

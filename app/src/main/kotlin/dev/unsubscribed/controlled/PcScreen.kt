@@ -158,6 +158,9 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
                 TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
             }
         }
+        // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
+        // A card, not a dialog: the trackpad below stays free to click Yes on the PC (2026-11-12 a dialog covered it).
+        if (pc != null) hid.smoothCode?.let { code -> PairCard(code, hid::cancelPairing) }
         if (pc == null) AddPc(model) else Pad(hid)
     }
     SnackbarHost(snack, Modifier.align(Alignment.BottomCenter))
@@ -200,21 +203,26 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
             } else Text(if (declined) t.smoothDeclinedBody else why ?: t.smoothOfferBody)
         },
     )
-    // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
-    hid.smoothCode?.let { code ->
-        AlertDialog(
-            onDismissRequest = {},
-            confirmButton = {},
-            dismissButton = { TextButton(hid::cancelPairing) { Text(t.cancel) } },
-            title = { Text(t.smoothPairTitle) },
-            text = { Column { Text(t.smoothPairBody); Text(code, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.displaySmall) } },
-        )
-    }
     // Just added: ask once (the guess preselected); later, from the button above. Never over the code: both came up
     // together after adding a PC and this one covered it (2026-11-11), so the code goes first.
     if (pc != null && hid.smoothCode == null && (model.askLayout || changing)) {
         val done = { changing = false; model.layoutAsked() }
         LayoutDialog(pc.layout, done, title = if (model.askLayout) t.askLayout else t.keyboardLayout) { model.setLayout(pc, it); done() }
+    }
+}
+
+@Composable
+private fun PairCard(code: String, cancel: () -> Unit) {
+    val t = LocalStrings.current
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer) {
+        Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 8.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+            Text(t.smoothPairTitle, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t.smoothPairBody, Modifier.weight(1f).padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium)
+                Text(code, Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.headlineMedium)
+            }
+            TextButton(cancel, Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(t.cancel) }
+        }
     }
 }
 

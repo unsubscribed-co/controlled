@@ -8,6 +8,8 @@ import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -166,7 +168,11 @@ class PcHid(context: Context, private val onHost: (address: String, name: String
                     if (held != 0 || switching) useBluetooth = true else releaseBluetooth()
                 } else link.close() // stopped meanwhile: don't keep a session nobody uses
             }
-            link.awaitClose { front -> handler.post { if (wifi === link) frontChanged(front) } }
+            link.awaitClose(
+                onFront = { front -> handler.post { if (wifi === link) frontChanged(front) } },
+                // What's copied on the PC can be pasted here too, as with a phone's own copy.
+                onCopied = { text -> handler.post { if (wifi === link) app.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("PC", text)) } },
+            )
             log { "smooth: session closed" }
             handler.post {
                 if (wifi === link) { wifi = null; smooth = Smooth.Off; frontChanged(Front.Normal); useBluetooth = false }
