@@ -1,8 +1,10 @@
 <en-US>
-- PC smooth mode now connects through the Bluetooth pairing you already have: no network settings, no firewall, on any Wi-Fi and on your phone's hotspot. Update Controlled for PC to 1.0.5 too.
-- When smooth mode can't connect, Controlled tells you why (another network, a network that keeps devices apart, paused on the PC, another phone using it) and keeps trying.
+- PC: pasted text arrives whole and exact through the PC's clipboard, which keeps what you had copied. Typing and deleting are steadier, with a clearer typing field.
+- Over windows run as administrator, smooth mode switches to Bluetooth by itself and back.
+- Add a PC lists computers already paired. Smooth mode recovers after re-pairing or a PC restart. Update Controlled for PC to 1.0.6 too.
 </en-US>
 <es-419>
-- El modo fluido del PC ahora se conecta por el emparejamiento Bluetooth que ya tienes: sin configurar la red ni el firewall, en cualquier Wi-Fi y en el hotspot de tu celular. Actualiza también Controlled for PC a la 1.0.5.
-- Cuando el modo fluido no puede conectarse, Controlled te dice por qué (otra red, una red que no deja que los equipos se hablen, en pausa en el PC, otro celular usándolo) y sigue intentando.
+- PC: el texto pegado llega completo y exacto por el portapapeles del PC, que conserva lo que tenías copiado. Escribir y borrar es más estable, con un campo de texto más claro.
+- Sobre ventanas de administrador, el modo fluido pasa solo a Bluetooth y vuelve.
+- Agregar un PC muestra los que ya están emparejados. El modo fluido se recupera tras re-emparejar o reiniciar el PC. Actualiza también Controlled for PC a la 1.0.6.
 </es-419>

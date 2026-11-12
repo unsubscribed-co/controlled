@@ -5,6 +5,7 @@
 // No console window: it runs in the background, started with Windows (MSIX startup task).
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 mod bt;
+mod clip;
 mod control;
 mod crypto;
 mod input;
@@ -27,6 +28,23 @@ fn spawn_window() -> Option<Child> {
     Command::new(std::env::current_exe().ok()?).arg("--window").spawn().ok()
 }
 
+/// Brings the window to the front if it's open (restored if minimized); false when there's none.
+fn focus_window() -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, IsIconic, SW_RESTORE, SetForegroundWindow, ShowWindow};
+    let title: Vec<u16> = ui::TITLE.encode_utf16().chain([0]).collect();
+    unsafe {
+        let w = FindWindowW(std::ptr::null(), title.as_ptr());
+        if w == 0 {
+            return false;
+        }
+        if IsIconic(w) != 0 {
+            ShowWindow(w, SW_RESTORE);
+        }
+        SetForegroundWindow(w);
+        true
+    }
+}
+
 fn main() {
     // No console to show a crash: write it to %APPDATA%\Controlled\error.log (inside the package's own folder
     // when installed from the Store), so a failure can be diagnosed.
@@ -38,8 +56,11 @@ fn main() {
     }
     // The window's local port doubles as the one-copy lock.
     let Ok(control) = TcpListener::bind(("127.0.0.1", control::PORT)) else {
-        // Already running (started with Windows, then opened from the Start menu): open its window instead.
-        spawn_window();
+        // Already running (started with Windows, then opened from the Start menu): its window comes to the front, or the
+        // running copy opens it, so there's never a second one (2026-11-11: each open added a window).
+        if !focus_window() {
+            control::send("show");
+        }
         return;
     };
     let shared: state::Shared = Default::default();
@@ -48,12 +69,13 @@ fn main() {
     let show: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
         let mut w = window.lock().unwrap();
         if w.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None))) {
+            focus_window(); // already open: to the front, not a second one
             return;
         }
         *w = spawn_window();
     });
     server::start(shared.clone(), show.clone());
-    control::start(control, shared.clone());
+    control::start(control, shared.clone(), show.clone());
     // Opened from Start or the Store: show the window (1.0.0 only did on its very first run, and an old marker left
     // by an uninstall kept it in the tray). Started by Windows at sign-in: stay in the tray.
     if !started_at_sign_in() {

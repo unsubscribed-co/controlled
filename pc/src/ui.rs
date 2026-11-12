@@ -8,6 +8,9 @@ use tao::window::WindowBuilder;
 use wry::WebViewBuilder;
 
 /// The tray menu's texts (the window has its own, in ui.html).
+/// The window's title, the same in every language: how a second copy finds it to bring it to the front.
+pub const TITLE: &str = "Controlled for PC";
+
 pub struct T {
     pub title: &'static str,
     pub connected: &'static str,
@@ -25,7 +28,7 @@ pub fn strings() -> &'static T {
 }
 
 const EN: T = T {
-    title: "Controlled for PC",
+    title: TITLE,
     connected: "Connected to",
     waiting: "Ready, waiting for your phone",
     paused_now: "Smooth mode paused",
@@ -36,7 +39,7 @@ const EN: T = T {
 };
 
 const ES: T = T {
-    title: "Controlled for PC",
+    title: TITLE,
     connected: "Conectado a",
     waiting: "Listo, esperando tu celular",
     paused_now: "Modo fluido en pausa",

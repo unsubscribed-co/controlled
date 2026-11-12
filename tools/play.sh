@@ -47,7 +47,7 @@ case "${1:-}" in
     # release-notes.txt keeps Play's own format: <en-US>...</en-US><es-419>...</es-419>, 500 characters each at most.
     notes=$(node -e '
       const t = require("fs").readFileSync("release-notes.txt", "utf8");
-      const n = [...t.matchAll(/<([a-zA-Z-]+)>\s*([\s\S]*?)\s*<\/\1>/g)].map(m => ({ language: m[1], text: m[2] }));
+      const n = [...t.matchAll(/<([a-zA-Z0-9-]+)>\s*([\s\S]*?)\s*<\/\1>/g)].map(m => ({ language: m[1], text: m[2] }));
       const long = n.find(x => x.text.length > 500);
       if (!n.length || long) { console.error(long ? long.language + " notes are over 500 characters" : "release-notes.txt has no notes"); process.exit(1); }
       console.log(JSON.stringify(n));')

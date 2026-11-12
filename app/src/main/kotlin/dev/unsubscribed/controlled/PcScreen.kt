@@ -11,6 +11,7 @@ import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -63,15 +64,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarDuration
@@ -96,6 +98,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -125,14 +129,14 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
     var changing by remember { mutableStateOf(false) }
     var offering by remember { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
-    // Once per administrator window, when a click or key would be lost: why, and the way out.
+    // Once per administrator window, when a click or key is lost there because the Bluetooth link is down too: why.
+    // (With Bluetooth, input just goes that way and the status label says so: nothing covers the keys.)
     // Marked shown only once it's gone: changing the key while it shows would cancel it (measured: it never appeared).
     // The administrator window leaving clears the key, which takes the message away with it.
     LaunchedEffect(hid.adminHintDue) {
         if (!hid.adminHintDue) return@LaunchedEffect
-        val result = snack.showSnackbar(if (hid.front == Front.Secure) t.secureBlocked else t.adminBlocked, actionLabel = t.useBluetooth, duration = SnackbarDuration.Long)
+        snack.showSnackbar(if (hid.front == Front.Secure) t.secureBlocked else t.adminBlocked, duration = SnackbarDuration.Long)
         hid.adminHintShown()
-        if (result == SnackbarResult.ActionPerformed) hid.useBluetoothHere()
     }
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
@@ -148,8 +152,9 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         // Status on its own full-width line, so a long PC name or layout never squeezes it.
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             PcStatus(hid)
-            // Offered while plain Bluetooth carries the input: a smoother pointer with the PC program.
-            if (pc != null && hid.link == PcLink.Connected && hid.smooth == Smooth.Off) {
+            // Whenever smooth mode is off: its reason, and a way to try again or set it up (never stuck without one).
+            // Not with Bluetooth off: every try would read as "not installed", which misleads.
+            if (pc != null && hid.link != PcLink.NoBluetooth && hid.smooth == Smooth.Off) {
                 TextButton({ offering = true }, Modifier.heightIn(min = 48.dp)) { Text(t.smoothOffer) }
             }
         }
@@ -168,30 +173,46 @@ fun PcScreen(model: RemoteModel, switch: () -> Unit) {
         SmoothEnd.Interrupted -> t.smoothInterrupted
         else -> null
     }
-    if (offering) AlertDialog(
+    // It connected, or the code is up: this dialog has done its job.
+    LaunchedEffect(hid.smooth) { if (hid.smooth != Smooth.Off) offering = false }
+    if (offering && hid.smooth == Smooth.Off) AlertDialog(
         onDismissRequest = { offering = false },
         confirmButton = {
             when {
                 declined -> TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.askPcAgain) }
-                why != null -> TextButton({ offering = false; hid.askSmoothAgain() }) { Text(t.tryAgain) }
+                // Stays open: "Trying…", then the outcome, so the button is seen to do something.
+                why != null -> TextButton(hid::askSmoothAgain, enabled = !hid.smoothTrying) { Text(t.tryAgain) }
                 else -> TextButton({ offering = false; hid.openStore() }) { Text(t.openOnPc) }
             }
         },
-        dismissButton = { TextButton({ offering = false }) { Text(t.notNow) } },
+        dismissButton = {
+            Row {
+                TextButton({ offering = false }) { Text(t.notNow) }
+                // Try again is always there, whatever the reason above (the reason's own action already is it if so).
+                if (!declined && why == null) TextButton(hid::askSmoothAgain, enabled = !hid.smoothTrying) { Text(t.tryAgain) }
+            }
+        },
         title = { Text(t.smoothOffer) },
-        text = { Text(if (declined) t.smoothDeclinedBody else why ?: t.smoothOfferBody) },
+        text = {
+            if (hid.smoothTrying) Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(t.trying, Modifier.padding(start = 12.dp))
+            } else Text(if (declined) t.smoothDeclinedBody else why ?: t.smoothOfferBody)
+        },
     )
     // Smooth mode's first connection to this PC: the PC asks the person to allow the phone, showing this same code.
     hid.smoothCode?.let { code ->
         AlertDialog(
             onDismissRequest = {},
             confirmButton = {},
+            dismissButton = { TextButton(hid::cancelPairing) { Text(t.cancel) } },
             title = { Text(t.smoothPairTitle) },
             text = { Column { Text(t.smoothPairBody); Text(code, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.displaySmall) } },
         )
     }
-    // Just added: ask once (the guess preselected); later, from the button above.
-    if (pc != null && (model.askLayout || changing)) {
+    // Just added: ask once (the guess preselected); later, from the button above. Never over the code: both came up
+    // together after adding a PC and this one covered it (2026-11-11), so the code goes first.
+    if (pc != null && hid.smoothCode == null && (model.askLayout || changing)) {
         val done = { changing = false; model.layoutAsked() }
         LayoutDialog(pc.layout, done, title = if (model.askLayout) t.askLayout else t.keyboardLayout) { model.setLayout(pc, it); done() }
     }
@@ -214,9 +235,20 @@ private fun PcStatus(hid: PcHid) {
         val dot = Modifier.size(8.dp).clip(CircleShape)
         Box(if (link == PcLink.Connected) dot.background(colors.primary) else dot.border(1.5.dp, colors.onSurfaceVariant, CircleShape))
         Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-        // Smooth mode in sight: an ember label, not just different words.
-        if (hid.smoothActive) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = colors.primaryContainer) {
-            Text(t.pcSmooth, Modifier.padding(horizontal = 10.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = colors.onPrimaryContainer)
+        // Smooth mode in sight: an ember label, not just different words. Where Windows blocks it, the same place says
+        // input goes over Bluetooth there, in a quiet color, and turns back by itself: one status, nothing covering the keys.
+        val why = hid.bluetoothFor
+        val label = when {
+            why == Front.Admin -> t.pcBluetoothAdmin
+            why == Front.Secure -> t.pcBluetoothSecure
+            why != null -> t.pcBluetoothNow
+            hid.smoothActive -> t.pcSmooth
+            else -> null
+        }
+        Crossfade(label, label = "smooth label") { l ->
+            if (l != null) Surface(Modifier.padding(start = 8.dp), shape = CircleShape, color = if (why == null) colors.primaryContainer else colors.surfaceVariant) {
+                Text(l, Modifier.padding(horizontal = 10.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = if (why == null) colors.onPrimaryContainer else colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -233,6 +265,18 @@ private fun AddPc(model: RemoteModel) {
     BackHandler(onBack = model::cancelAdd)
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(painterResource(R.drawable.sym_computer), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+        // Computers already paired with this phone (and not in the app yet): one tap, no pairing again.
+        val known = remember { hid?.pairedComputers().orEmpty().filter { (a, _) -> model.controllers.pcs.none { it.address == a } } }
+        if (known.isNotEmpty()) {
+            Text(t.alreadyPaired, style = MaterialTheme.typography.titleSmall)
+            for ((address, name) in known) {
+                OutlinedButton({ model.addPairedPc(address, name) }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Icon(painterResource(R.drawable.sym_computer), null)
+                    Text(name, Modifier.padding(start = 8.dp).weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Text(t.orNewPc, style = MaterialTheme.typography.titleSmall)
+        }
         Text(t.addPcSteps, style = MaterialTheme.typography.bodyLarge)
         if (slow && hid?.link == PcLink.Waiting) Text(t.addPcSlow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button({ visible.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)) },
@@ -241,20 +285,35 @@ private fun AddPc(model: RemoteModel) {
     }
 }
 
-/** Live typing: each change goes out as Backspaces then the new characters, as it's typed. Enter sends Enter and clears. */
+/**
+ * Live typing, on several lines so what's written stays in sight. Each change goes to the PC as it's typed: Backspaces
+ * for what was deleted, then the new characters, a new line being Enter. Text that arrives at once and long (a paste)
+ * goes whole, through the PC's clipboard and Ctrl+V; the first time, the person is told it replaces what's copied there.
+ * The clear button empties only this field: what's on the PC stays. No autocorrect: what's typed is what the PC gets.
+ */
 @Composable
 private fun TypeField(hid: PcHid) {
     val t = LocalStrings.current
     var text by remember { mutableStateOf("") }
+    // A paste waiting for the once-only notice: the field as it was before it, and the pasted text.
+    var pending by remember { mutableStateOf<Pair<String, String>?>(null) }
     // What the PC's layout can't type (emoji, symbols it lacks) never reaches it: say so, and don't Backspace for it.
-    val typable = { c: Char -> hid.smoothActive || Keymap.strokes(c, hid.layout) != null }
+    val typable = { c: Char -> hid.smoothActive || c == '\n' || Keymap.strokes(c, hid.layout) != null }
     val missing = text.filterNot(typable).toSet()
     OutlinedTextField(
         text,
         { new ->
             val common = text.commonPrefixWith(new).length
-            repeat(text.substring(common).count(typable)) { hid.key(0, Keymap.BACKSPACE) }
-            hid.type(new.substring(common))
+            hid.erase(text.substring(common).count(typable))
+            val added = new.substring(common)
+            // Whether it's a paste goes by what was really put in: an edit near the start retypes the rest after it,
+            // which isn't pasted text (2026-11-11 review: one letter before 15 others counted as a paste).
+            val inserted = added.dropLast(text.substring(common).commonSuffixWith(added).length)
+            when {
+                !isPaste(inserted) || !hid.pastes -> typeLines(hid, added)
+                hid.pasteWarned -> hid.paste(added)
+                else -> pending = new.substring(0, common) to added
+            }
             text = new
         },
         // The keyboard's own delete key on an empty field arrives as a key press: it still deletes on the PC.
@@ -263,11 +322,34 @@ private fun TypeField(hid: PcHid) {
             if (it.type == KeyEventType.KeyDown) hid.key(0, Keymap.BACKSPACE)
             true
         },
-        label = { Text(t.typeOnPc) }, singleLine = true,
-        isError = missing.isNotEmpty(), supportingText = if (missing.isNotEmpty()) ({ Text(t.notTyped(missing.joinToString(" "))) }) else null,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(onSend = { hid.key(0, Keymap.ENTER); text = "" }),
+        label = { Text(t.typeOnPc) },
+        trailingIcon = if (text.isEmpty()) null else ({
+            IconButton({ text = "" }) { Icon(painterResource(R.drawable.sym_close), t.clearHere) }
+        }),
+        minLines = 1, maxLines = 4,
+        isError = missing.isNotEmpty(),
+        supportingText = { Text(if (missing.isNotEmpty()) t.notTyped(missing.joinToString(" ")) else t.pcTypeHint) },
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Text),
     )
+    pending?.let { (before, added) ->
+        val cancel = { pending = null; text = before }
+        AlertDialog(
+            onDismissRequest = cancel,
+            confirmButton = { TextButton({ hid.pasteWarned = true; hid.paste(added); pending = null }) { Text(t.pasteOnPc) } },
+            dismissButton = { TextButton(cancel) { Text(t.cancel) } },
+            title = { Text(t.pasteTitle) },
+            text = { Text(t.pasteBody) },
+        )
+    }
+}
+
+/** [added] arrived at once and long: a paste, not typing (a keyboard commits a word at a time, a suggestion included). */
+fun isPaste(added: String) = added.length >= Hid.PASTE_MIN
+
+/** Typed text with its new lines as Enter. */
+private fun typeLines(hid: PcHid, added: String) = added.split('\n').forEachIndexed { i, line ->
+    if (i > 0) hid.key(0, Keymap.ENTER)
+    if (line.isNotEmpty()) hid.type(line)
 }
 
 /**

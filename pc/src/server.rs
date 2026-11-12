@@ -148,18 +148,10 @@ fn handle(mut bt: bt::Stream, key: &SecretKey, shared: &Shared, enigo: &Arc<Mute
     let keys = keys.unwrap();
     if !known {
         show();
-        // Up to 85 s for the person; a phone that leaves meanwhile (closes the channel) takes its question with it.
-        let mut allowed = false;
-        for _ in 0..85 {
-            match rx.recv_timeout(Duration::from_secs(1)) {
-                Ok(yes) => {
-                    allowed = yes;
-                    break;
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !bt.closed() => {}
-                Err(_) => break, // the phone left, or a newer question from it took this one's place
-            }
-        }
+        // Up to 85 s for the person (a newer question from the same phone ends this one at once). Not watching for the
+        // phone leaving: on a laptop (2026-11-11) that check misread an open channel as closed after a second and
+        // answered No by itself, so the code never showed.
+        let allowed = rx.recv_timeout(Duration::from_secs(85)).unwrap_or(false);
         clear_ask();
         if !allowed {
             let _ = write_frame(&mut bt, &crypto::seal(&keys.to_phone, crypto::TCP, 1, b"NO"));
@@ -286,8 +278,8 @@ unsafe extern "system" fn on_front(_: windows_sys::Win32::UI::Accessibility::HWI
     front_changed();
 }
 
-/// Windows tells this thread when another window comes to the front, or the UAC prompt or lock screen takes over;
-/// nothing runs in between (no polling).
+/// Windows tells this thread when another window comes to the front, or the UAC prompt or lock screen takes over; the
+/// window under the pointer is checked on a timer.
 fn watch_front() {
     use windows_sys::Win32::UI::Accessibility::SetWinEventHook;
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
@@ -296,19 +288,30 @@ fn watch_front() {
             SetWinEventHook(event, event, 0, Some(on_front), 0, 0, WINEVENT_OUTOFCONTEXT);
         }
         front_changed();
+        // The window under the pointer has no notice of its own: looked at 4 times a second (see [front]).
+        SetTimer(0, 0, 250, None);
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, 0, 0, 0) > 0 {
+            if msg.message == WM_TIMER {
+                front_changed();
+            }
             DispatchMessageW(&msg);
         }
     });
 }
 
-/// The only writer to the phone once allowed, so frames never interleave: "E0"/"E1"/"E2" when what's in front changes
+/// The only writer to the phone once allowed, so frames never interleave: first "C1" (paste and erase are understood),
+/// then "E0"/"E1"/"E2" when what's in front changes
 /// (the phone may then offer Bluetooth; it routes nothing by itself), and an empty frame after
 /// [HEARTBEAT] without anything else, plus a UDP one that keeps Windows letting the phone's moves in. Ends when the
 /// socket closes.
 fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm, udp: &UdpSocket) {
     let (mut counter, mut told, mut beats) = (2u64, NORMAL, 1u64); // 2: the Wi-Fi proof's
+    // What this PC takes beyond keys and text: 1 = paste and erase. A phone that never hears it types and deletes key by key.
+    counter += 1;
+    if !write_frame(out, &crypto::seal(to_phone, crypto::TCP, counter, &[b'C', 1])) {
+        return;
+    }
     loop {
         beats += 1;
         let _ = udp.send(&crypto::seal(to_phone, crypto::UDP, beats, b"U"));
@@ -331,35 +334,51 @@ fn tell_phone(out: &mut TcpStream, to_phone: &aes_gcm::Aes256Gcm, udp: &UdpSocke
 }
 
 /// What's in front: Windows' secure screen (Ctrl+Alt+Del, lock, UAC: no foreground window on this desktop), an app run
-/// as administrator (Task Manager, for an administrator), or anything else. A process this program can't even open (a
-/// protected one) counts as normal: wrongly calling it blocked would mislead more than missing it.
+/// as administrator (Task Manager, for an administrator) in front or under the pointer, or anything else. Under the
+/// pointer too: 2026-11-11 an administrator's terminal behind another window took the pointer but not its clicks, so it
+/// could never come to the front and Bluetooth was never offered.
 fn front() -> u8 {
-    use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
-    use windows_sys::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetAncestor, GetCursorPos, GetForegroundWindow, WindowFromPoint, GA_ROOT};
     unsafe {
         let w = GetForegroundWindow();
         if w == 0 {
             return SECURE;
         }
+        if elevated(w) {
+            return ADMIN;
+        }
+        let mut at = POINT { x: 0, y: 0 };
+        let under = if GetCursorPos(&mut at) != 0 { GetAncestor(WindowFromPoint(at), GA_ROOT) } else { 0 };
+        if under != 0 && under != w && elevated(under) { ADMIN } else { NORMAL }
+    }
+}
+
+/// The window's program runs as administrator. One this program can't even open (a protected one) counts as not:
+/// wrongly calling it blocked would mislead more than missing it.
+fn elevated(w: windows_sys::Win32::Foundation::HWND) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
+    use windows_sys::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    unsafe {
         let mut pid = 0;
         GetWindowThreadProcessId(w, &mut pid);
         let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if p == 0 {
-            return NORMAL;
+            return false;
         }
         let mut token = 0;
         let opened = OpenProcessToken(p, TOKEN_QUERY, &mut token) != 0;
         CloseHandle(p);
         if !opened {
-            return ADMIN; // its token is closed to this program: a higher one
+            return true; // its token is closed to this program: a higher one
         }
         let mut e = TOKEN_ELEVATION { TokenIsElevated: 0 };
         let mut len = 0;
         let ok = GetTokenInformation(token, TokenElevation, &mut e as *mut _ as *mut _, std::mem::size_of::<TOKEN_ELEVATION>() as u32, &mut len) != 0;
         CloseHandle(token);
-        if ok && e.TokenIsElevated != 0 { ADMIN } else { NORMAL }
+        ok && e.TokenIsElevated != 0
     }
 }
 

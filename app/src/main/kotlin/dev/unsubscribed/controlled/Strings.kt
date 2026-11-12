@@ -68,6 +68,7 @@ interface Strings {
     val smoothBusy: String
     val smoothInterrupted: String
     val tryAgain: String
+    val trying: String
     val askPcAgain: String
     val notNow: String
     val smoothPairTitle: String
@@ -162,7 +163,10 @@ interface Strings {
     val pcBusy: String
     val adminBlocked: String
     val secureBlocked: String
-    val useBluetooth: String
+    /** The smooth-mode label while input goes over Bluetooth for what Windows blocks. */
+    val pcBluetoothAdmin: String
+    val pcBluetoothSecure: String
+    val pcBluetoothNow: String
     val fixKeys: String
     val fixKeysBody: String
     /** A computer paired before has the phone saved without the keyboard: remove it there and add it again. */
@@ -176,6 +180,15 @@ interface Strings {
     val leftClick: String
     val rightClick: String
     val typeOnPc: String
+    /** Add a PC: the computers this phone is already paired with, then the steps for a new one. */
+    val alreadyPaired: String
+    val orNewPc: String
+    /** Under the PC's typing field: it's live, and the clear button only clears here. */
+    val pcTypeHint: String
+    val clearHere: String
+    val pasteTitle: String
+    val pasteBody: String
+    val pasteOnPc: String
     /** Characters the PC's keyboard layout can't type, so they didn't reach it. */
     fun notTyped(chars: String): String
     val esc: String
@@ -290,7 +303,7 @@ object En : Strings {
     override val pairAgain = "Pair again"
     override val pcSmooth = "Smooth mode · Wi-Fi"
     override val smoothOffer = "Smooth mode"
-    override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC, or open it if it's already there. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: click Install, or Open."
+    override val smoothOfferBody = "For a smoother pointer, install the free Controlled for PC app on this PC, or open it if it's already there. It works over your Wi-Fi; Bluetooth stays as the backup.\n\nOpen on the PC brings up its Microsoft Store page there: click Install, or Open. If nothing opens, type www.pc.unsubscribed.dev in the PC's browser."
     override val openOnPc = "Open on the PC"
     override val smoothDeclinedBody = "The PC didn't allow this phone, so it stays on Bluetooth. To use smooth mode, ask again and click Yes on the PC when it shows the same code as here."
     override val askPcAgain = "Ask the PC again"
@@ -301,6 +314,7 @@ object En : Strings {
     override val smoothBusy = "Another phone is using smooth mode on this PC. When it stops, this phone takes over by itself. Meanwhile, Bluetooth keeps working."
     override val smoothInterrupted = "The PC reached this phone, but smooth mode couldn't finish connecting. It keeps trying by itself. Meanwhile, Bluetooth keeps working."
     override val tryAgain = "Try again"
+    override val trying = "Trying…"
     override val notNow = "Not now"
     override val smoothPairTitle = "Allow this phone on the PC"
     override val smoothPairBody = "The PC is asking to allow this phone. Click Yes there if it shows this same code:"
@@ -393,7 +407,9 @@ object En : Strings {
     override val fixKeys = "Fix keyboard and mouse"
     override val adminBlocked = "Windows blocks smooth mode in administrator windows."
     override val secureBlocked = "Windows blocks smooth mode on this screen."
-    override val useBluetooth = "Use Bluetooth"
+    override val pcBluetoothAdmin = "Bluetooth · admin window"
+    override val pcBluetoothSecure = "Bluetooth · Windows screen"
+    override val pcBluetoothNow = "Bluetooth for now"
     override val fixKeysBody = "If keys repeat, the wrong characters come out or the pointer acts strange, the PC kept an old setup for this phone (another remote app can cause it).\n\nOn the PC, open Settings > Bluetooth & devices and remove this phone. Then tap Add a PC and pair again."
     override val addPcSlow = "Still waiting? Keep this screen open while the PC adds the phone. If the PC already lists this phone, remove it there and add it again."
     override val pcPermission = "Controlled works as a Bluetooth keyboard and mouse for your PC. Android will ask to let it connect to nearby devices."
@@ -404,6 +420,13 @@ object En : Strings {
     override val leftClick = "Left click"
     override val rightClick = "Right click"
     override val typeOnPc = "Type on the PC"
+    override val alreadyPaired = "Already paired with this phone"
+    override val orNewPc = "Or a new PC"
+    override val pcTypeHint = "Shows up on the PC as you type. The X clears only here."
+    override val clearHere = "Clear here only"
+    override val pasteTitle = "Paste on the PC?"
+    override val pasteBody = "Pasted text goes to the PC through its clipboard. Copied text there comes back right after, but a copied image or file is replaced. You won't be asked again."
+    override val pasteOnPc = "Paste"
     override fun notTyped(chars: String) = "Not typed on the PC: $chars. Its keyboard can't type them."
     override val esc = "Esc"
     override val tab = "Tab"
@@ -515,7 +538,7 @@ object Es : Strings {
     override val pairAgain = "Vincular de nuevo"
     override val pcSmooth = "Modo fluido · Wi-Fi"
     override val smoothOffer = "Modo fluido"
-    override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC, o ábrela si ya la tienes. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: haz clic en Instalar, o en Abrir."
+    override val smoothOfferBody = "Para un puntero más fluido, instala la app gratuita Controlled for PC en este PC, o ábrela si ya la tienes. Funciona por tu Wi-Fi; el Bluetooth queda de respaldo.\n\nAbrir en el PC muestra allá su página de Microsoft Store: haz clic en Instalar, o en Abrir. Si no se abre nada, escribe www.pc.unsubscribed.dev en el navegador del PC."
     override val openOnPc = "Abrir en el PC"
     override val smoothDeclinedBody = "El PC no permitió este celular, así que sigue por Bluetooth. Para usar el modo fluido, pregunta de nuevo y haz clic en Sí en el PC cuando muestre el mismo código que aquí."
     override val askPcAgain = "Preguntar de nuevo al PC"
@@ -526,6 +549,7 @@ object Es : Strings {
     override val smoothBusy = "Otro celular está usando el modo fluido en este PC. Cuando termine, este celular lo toma solo. Mientras tanto, el Bluetooth sigue funcionando."
     override val smoothInterrupted = "El PC llegó a este celular, pero el modo fluido no terminó de conectarse. Sigue intentando solo. Mientras tanto, el Bluetooth sigue funcionando."
     override val tryAgain = "Intentar de nuevo"
+    override val trying = "Intentando…"
     override val notNow = "Ahora no"
     override val smoothPairTitle = "Permite este celular en el PC"
     override val smoothPairBody = "El PC pide permitir este celular. Haz clic en Sí allá si muestra este mismo código:"
@@ -618,7 +642,9 @@ object Es : Strings {
     override val fixKeys = "Arreglar teclado y mouse"
     override val adminBlocked = "Windows bloquea el modo fluido en ventanas de administrador."
     override val secureBlocked = "Windows bloquea el modo fluido en esta pantalla."
-    override val useBluetooth = "Usar Bluetooth"
+    override val pcBluetoothAdmin = "Bluetooth · ventana admin"
+    override val pcBluetoothSecure = "Bluetooth · pantalla de Windows"
+    override val pcBluetoothNow = "Bluetooth por ahora"
     override val fixKeysBody = "Si las teclas se repiten, salen caracteres equivocados o el puntero se comporta raro, el PC guardó una configuración vieja de este celular (otra app de control remoto puede causarlo).\n\nEn el PC, abre Configuración > Bluetooth y dispositivos y quita este celular. Luego toca Agregar un PC y empareja de nuevo."
     override val addPcSlow = "¿Sigue esperando? Deja esta pantalla abierta mientras el PC agrega el teléfono. Si el PC ya muestra este teléfono, quítalo ahí y agrégalo otra vez."
     override val pcPermission = "Controlled funciona como teclado y mouse Bluetooth para tu PC. Android te pedirá permiso para conectarse a dispositivos cercanos."
@@ -629,6 +655,13 @@ object Es : Strings {
     override val leftClick = "Clic izquierdo"
     override val rightClick = "Clic derecho"
     override val typeOnPc = "Escribe en el PC"
+    override val alreadyPaired = "Ya emparejados con este celular"
+    override val orNewPc = "O un PC nuevo"
+    override val pcTypeHint = "Aparece en el PC mientras escribes. La X borra solo aquí."
+    override val clearHere = "Borrar solo aquí"
+    override val pasteTitle = "¿Pegar en el PC?"
+    override val pasteBody = "El texto pegado llega al PC por su portapapeles. Si allá tenías un texto copiado, vuelve enseguida, pero una imagen o un archivo copiado se reemplaza. No volveremos a preguntar."
+    override val pasteOnPc = "Pegar"
     override fun notTyped(chars: String) = "No se escribieron en el PC: $chars. Su teclado no los tiene."
     override val esc = "Esc"
     override val tab = "Tab"

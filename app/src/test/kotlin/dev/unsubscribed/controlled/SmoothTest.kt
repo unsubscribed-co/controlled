@@ -64,6 +64,39 @@ class SmoothTest {
         assertEquals(Front.Normal, effectiveFront(Front.Normal, expectingSecure = false))
     }
 
+    @Test fun aLongTextArrivingAtOnceIsAPasteAWordIsNot() {
+        // 2026-11-11: a pasted link typed key by key came out with lost and repeated characters on Windows 11.
+        assertEquals(true, isPaste("https://www.google.com/search?q=x"))
+        assertEquals(false, isPaste("necesitamos "))
+        assertEquals(false, isPaste("a"))
+    }
+
+    @Test fun smoothModeIsNeverLeftOffWithNothingTrying() {
+        // 2026-11-11: after Add a PC smooth mode never started, so the code never showed, until the app was reopened.
+        assertEquals(true, smoothIdle(linkUp = true, smooth = Smooth.Off, retryPending = false))
+        // A retry already on its way keeps its backoff; pairing or on is not idle; no keyboard link, no PC to reach.
+        assertEquals(false, smoothIdle(linkUp = true, smooth = Smooth.Off, retryPending = true))
+        assertEquals(false, smoothIdle(linkUp = true, smooth = Smooth.Pairing, retryPending = false))
+        assertEquals(false, smoothIdle(linkUp = true, smooth = Smooth.On, retryPending = false))
+        assertEquals(false, smoothIdle(linkUp = false, smooth = Smooth.Off, retryPending = false))
+    }
+
+    @Test fun aNetworkReasonShowsOnlyIfItHappensTwiceInARow() {
+        // 2026-11-11: back from the background, the first try read "keeps devices apart" and the next one connected.
+        assertEquals(false, showsReason(SmoothEnd.Isolated, misses = 0))
+        assertEquals(true, showsReason(SmoothEnd.Isolated, misses = 1))
+        assertEquals(false, showsReason(SmoothEnd.OtherNetwork, misses = 0))
+        // The person's or the PC's own answers show at once.
+        assertEquals(true, showsReason(SmoothEnd.Declined, misses = 0))
+        assertEquals(true, showsReason(SmoothEnd.Paused, misses = 0))
+        assertEquals(false, showsReason(SmoothEnd.Ended, misses = 3))
+    }
+
+    @Test fun theStuckKeyWatchdogLeavesButtonsAndAWindowSwitchAlone() {
+        assertEquals(Hid.keyboard(0, 0).toList(), stallRelease(switching = false).toList())
+        assertEquals(Hid.keyboard(Keymap.ALT, 0).toList(), stallRelease(switching = true).toList())
+    }
+
     @Test fun aSessionThatEndedReconnectsAtOnce() {
         assertEquals(0L, smoothRetryMs(SmoothEnd.Ended, 0))
     }

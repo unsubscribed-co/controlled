@@ -23,25 +23,6 @@ impl Stream {
     }
 }
 
-impl Stream {
-    /// Whether the phone closed its end. Doesn't wait and reads nothing: it only looks (select, then a peek).
-    pub fn closed(&self) -> bool {
-        unsafe {
-            let mut set = FD_SET { fd_count: 1, fd_array: [0; 64] };
-            set.fd_array[0] = self.0;
-            let now = TIMEVAL { tv_sec: 0, tv_usec: 0 };
-            match select(0, &mut set, std::ptr::null_mut(), std::ptr::null_mut(), &now) {
-                0 => false, // nothing to read: still there
-                n if n < 0 => true,
-                _ => {
-                    let mut b = 0u8;
-                    recv(self.0, &mut b, 1, MSG_PEEK) <= 0 // readable with nothing in it: closed (or broken)
-                }
-            }
-        }
-    }
-}
-
 impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = unsafe { recv(self.0, buf.as_mut_ptr(), buf.len().min(i32::MAX as usize) as i32, 0) };
@@ -65,27 +46,39 @@ impl Drop for Stream {
     }
 }
 
-/// Listens on a free RFCOMM channel, lists it in this PC's Bluetooth services and hands each phone that opens it to
-/// [on_phone] until the radio goes off; then takes the listing down, so a phone never finds a channel that leads
-/// nowhere. False when it couldn't open: this PC has no Bluetooth radio, or it's off.
-fn door(on_phone: &(impl Fn(Stream) + Send + Sync + Clone + 'static), available: &impl Fn(bool)) -> bool {
+/// How a [door] ended: due for its refresh, or the radio went away.
+enum Door {
+    Refresh,
+    Down,
+}
+
+/// How often the door is closed and opened again, listing included. 2026-11-11: re-pairing the phone while the program
+/// ran made Windows drop the listing, and phones found nothing until the program restarted; a fresh door every few
+/// seconds puts it back on its own (a phone that knocks in the gap tries again).
+const REFRESH: Duration = Duration::from_secs(10);
+
+/// Listens on an RFCOMM channel (the last one again if it's still free, so the listing doesn't move), lists it in this
+/// PC's Bluetooth services and hands each phone that opens it to [on_phone], until [REFRESH] passes or the radio goes
+/// off; then takes the listing down. None when it couldn't open: this PC has no Bluetooth radio, or it's off.
+fn door(on_phone: &(impl Fn(Stream) + Send + Sync + Clone + 'static), available: &impl Fn(bool), channel: &mut u32) -> Option<Door> {
     unsafe {
-        let mut data: WSADATA = std::mem::zeroed();
-        WSAStartup(0x0202, &mut data);
-        let s = socket(AF_BTH as i32, SOCK_STREAM, BTHPROTO_RFCOMM as i32);
-        if s == INVALID_SOCKET {
-            return false;
-        }
-        let s = Stream(s); // closes it on any return
-        let mut a = SOCKADDR_BTH { addressFamily: AF_BTH, btAddr: 0, serviceClassId: std::mem::zeroed(), port: BT_PORT_ANY };
+        let open = |port: u32| -> Option<(Stream, SOCKADDR_BTH)> {
+            let s = socket(AF_BTH as i32, SOCK_STREAM, BTHPROTO_RFCOMM as i32);
+            if s == INVALID_SOCKET {
+                return None;
+            }
+            let s = Stream(s); // closes it on any return
+            let a = SOCKADDR_BTH { addressFamily: AF_BTH, btAddr: 0, serviceClassId: std::mem::zeroed(), port };
+            // Only devices paired with this PC: Windows asks for the pairing's authentication before a phone gets in.
+            let on: u32 = 1;
+            setsockopt(s.0, SOL_RFCOMM, SO_BTH_AUTHENTICATE, &on as *const u32 as *const u8, 4);
+            let len = std::mem::size_of::<SOCKADDR_BTH>() as i32;
+            (bind(s.0, &a as *const _ as *const SOCKADDR, len) == 0 && listen(s.0, 4) == 0).then_some((s, a))
+        };
+        let Some((s, mut a)) = (if *channel != 0 { open(*channel) } else { None }).or_else(|| open(BT_PORT_ANY)) else { return None };
         let mut len = std::mem::size_of::<SOCKADDR_BTH>() as i32;
-        // Only devices paired with this PC: Windows asks for the pairing's authentication before a phone gets in.
-        let on: u32 = 1;
-        setsockopt(s.0, SOL_RFCOMM, SO_BTH_AUTHENTICATE, &on as *const u32 as *const u8, 4);
-        if bind(s.0, &a as *const _ as *const SOCKADDR, len) != 0 || listen(s.0, 4) != 0 {
-            return false;
-        }
         getsockname(s.0, &mut a as *mut _ as *mut SOCKADDR, &mut len);
+        *channel = a.port;
         let mut name: Vec<u16> = "Controlled\0".encode_utf16().collect();
         let mut service = SERVICE;
         let mut addr = CSADDR_INFO {
@@ -102,34 +95,62 @@ fn door(on_phone: &(impl Fn(Stream) + Send + Sync + Clone + 'static), available:
         q.dwNumberOfCsAddrs = 1;
         q.lpcsaBuffer = &mut addr;
         if WSASetServiceW(&q, RNRSERVICE_REGISTER, 0) != 0 {
-            return false;
+            return None;
         }
         available(true);
+        // Non-blocking, looked at every 200 ms until the refresh is due: no select() on a Bluetooth socket (a select-based
+        // check misread an open channel on the laptop, 2026-11-11).
+        let mut on: u32 = 1;
+        ioctlsocket(s.0, FIONBIO, &mut on);
+        let until = std::time::Instant::now() + REFRESH;
         let mut failed = 0;
-        while failed < 5 {
+        let end = loop {
+            if failed >= 5 {
+                break Door::Down; // one device that aborts or fails authentication isn't the radio going off; five in a row is
+            }
+            if std::time::Instant::now() >= until {
+                break Door::Refresh;
+            }
             let c = accept(s.0, std::ptr::null_mut(), std::ptr::null_mut());
             if c == INVALID_SOCKET {
-                // One device that aborts or fails authentication isn't the radio going off; five in a row is.
-                failed += 1;
+                if WSAGetLastError() != WSAEWOULDBLOCK {
+                    failed += 1;
+                }
                 std::thread::sleep(Duration::from_millis(200));
                 continue;
             }
             failed = 0;
+            // The phone's own socket blocks as usual (it inherits non-blocking from the door).
+            let mut off: u32 = 0;
+            ioctlsocket(c, FIONBIO, &mut off);
             let on_phone = on_phone.clone();
             std::thread::spawn(move || on_phone(Stream(c)));
-        }
+        };
         WSASetServiceW(&q, RNRSERVICE_DELETE, 0);
-        true
+        Some(end)
     }
 }
 
-/// Opens Controlled's Bluetooth door ([door]) for as long as the program runs. While Bluetooth is off (or this PC has
-/// none) it tries again every few seconds and says so through [available].
+/// Keeps Controlled's Bluetooth door ([door]) open for as long as the program runs, opening it afresh every [REFRESH].
+/// While Bluetooth is off (or this PC has none) it tries again every few seconds and says so through [available].
 pub fn serve(on_phone: impl Fn(Stream) + Send + Sync + Clone + 'static, available: impl Fn(bool) + Send + 'static) {
-    std::thread::spawn(move || loop {
-        if !door(&on_phone, &available) {
-            available(false);
+    std::thread::spawn(move || {
+        // Winsock once for the program's life (another call per door would only raise its count).
+        unsafe {
+            let mut data: WSADATA = std::mem::zeroed();
+            WSAStartup(0x0202, &mut data);
         }
-        std::thread::sleep(Duration::from_secs(5));
+        let mut channel = 0;
+        loop {
+            match door(&on_phone, &available, &mut channel) {
+                Some(Door::Refresh) => {}
+                Some(Door::Down) => std::thread::sleep(Duration::from_secs(1)),
+                None => {
+                    available(false);
+                    channel = 0;
+                    std::thread::sleep(Duration::from_secs(5));
+                }
+            }
+        }
     });
 }

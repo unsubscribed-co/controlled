@@ -95,10 +95,13 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
      * The phone as a Bluetooth keyboard and mouse; a computer that connects while adding one is saved as a PC. Null before
      * Android 9, which has no HID device profile: there the app doesn't offer Add a PC.
      */
-    val hid = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name ->
+    val hid: PcHid? = if (Build.VERSION.SDK_INT >= 28) PcHid(app) { address, name ->
         if (screen == Screen.Pc && pc == null) {
             savePc(PairedPc(address, name ?: "PC", Layout.guess()))
             askLayout = true
+            // It's this PC now: smooth mode looks for its program right away. 2026-11-11: it only did once the app was
+            // left and opened again, so the code to allow the phone never showed after adding a PC.
+            hid?.start(address)
         }
     } else null
     /**
@@ -371,6 +374,13 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         search?.cancel()
         screen = Screen.Pc
         if (visible) hid?.start(null)
+    }
+
+    /** A computer already paired with this phone, picked on Add a PC: saved and called, no pairing again. */
+    fun addPairedPc(address: String, name: String) {
+        savePc(PairedPc(address, name, Layout.guess()))
+        askLayout = true
+        hid?.start(address)
     }
 
     /** Back from adding a controller, to the default one (or to finding a TV when there's none yet). */

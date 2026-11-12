@@ -85,6 +85,8 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.LOG) intent?.getStringExtra("tv_ip")?.let(model::devMoveTv)
         // Smooth-mode test driver: --es wifi_mouse <PC Bluetooth address> (WifiMouse).
         if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
+        // Stuck-key guard test (PcHid.stallTest): --es stall_test 1
+        if (BuildConfig.LOG) intent?.getStringExtra("stall_test")?.let { model.hid?.stallTest() }
         if (intent?.action != Intent.ACTION_SEND) return
         val t = stringsOf(resources.configuration.locales[0].language)
         // A link goes to a TV: from the PC, open the default TV (or the first one).

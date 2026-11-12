@@ -1,5 +1,5 @@
 //! The local channel between the background program and its window (a separate process): one command per connection,
-//! on 127.0.0.1 only. Commands: `status`, `pause 1|0`, `remove <key>`, `answer 1|0 <code>`.
+//! on 127.0.0.1 only. Commands: `status`, `pause 1|0`, `remove <key>`, `answer 1|0 <code>`, `show`.
 use crate::state::{self, Shared};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -76,11 +76,14 @@ pub fn parse(text: &str) -> Status {
     s
 }
 
-pub fn start(listener: TcpListener, shared: Shared) {
+pub fn start(listener: TcpListener, shared: Shared, show: std::sync::Arc<dyn Fn() + Send + Sync>) {
     std::thread::spawn(move || {
         for mut s in listener.incoming().flatten() {
             let mut line = String::new();
             if BufReader::new(&s).read_line(&mut line).is_ok() {
+                if line.trim() == "show" {
+                    show(); // another copy was opened: this one shows (or brings up) the one window
+                }
                 let _ = s.write_all(reply(&shared, &line).as_bytes());
             }
         }

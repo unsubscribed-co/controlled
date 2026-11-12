@@ -6,6 +6,24 @@ import org.junit.Test
 import java.io.File
 
 class PcTest {
+    @Test fun theStorePageTypesWithoutShiftOnEveryLayout() {
+        // A lost Shift turned "/" into "7" in the old ms-windows-store link; this address has nothing to lose.
+        for (layout in Layout.entries) for (c in Hid.STORE_PAGE) {
+            val s = Keymap.strokes(c, layout)
+            assertEquals("$c on $layout", listOf(0), s?.map { it.mods })
+        }
+    }
+
+    @Test fun aShiftedKeyGoesLikeOnARealKeyboardShiftFirstAndLast() {
+        // 2026-11-11: Shift and "7" in one report gave "7" instead of "/" on a laptop, about one time in five.
+        val slash = Hid.stroke(Keymap.SHIFT, 0x24).map { it.toList() }
+        val up = Hid.keyboard(0, 0)
+        assertEquals(listOf(Hid.keyboard(Keymap.SHIFT, 0), Hid.keyboard(Keymap.SHIFT, 0x24), Hid.keyboard(Keymap.SHIFT, 0), up, up).map { it.toList() }, slash)
+        // "All up" twice: a key repeats on the PC only if both are lost.
+        assertEquals(listOf(Hid.keyboard(0, 0x04), up, up).map { it.toList() }, Hid.stroke(0, 0x04).map { it.toList() })
+        assertEquals(listOf(Hid.keyboard(Keymap.GUI, 0), up, up).map { it.toList() }, Hid.stroke(Keymap.GUI, 0).map { it.toList() })
+    }
+
     /** What each layout must type beyond plain ASCII; US has no accents (Keymap skips them). */
     private val extra = mapOf(
         Layout.LatAm to "ñÑáéíóúÁÉÍÓÚüÜ¿¡°¬´¨",

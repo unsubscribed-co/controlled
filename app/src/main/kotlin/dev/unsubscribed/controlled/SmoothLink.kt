@@ -112,13 +112,20 @@ class SmoothLink(context: Context) {
     fun connect(pc: BluetoothDevice, onCode: (String) -> Unit): SmoothEnd? {
         val here = reachable().takeIf { it.isNotEmpty() } ?: return SmoothEnd.NoWifi
         val (private, phonePub) = identity()
-        val bt = runCatching { pc.createRfcommSocketToServiceRecord(SERVICE).also { this.bt = it; if (closed) it.close() }.apply { connect() } }
-            .onFailure { log { "smooth: no Controlled for PC over Bluetooth: $it" } }.getOrNull() ?: return SmoothEnd.NoProgram
+        val bt = runCatching { pc.createRfcommSocketToServiceRecord(SERVICE).also { this.bt = it; if (closed) it.close() } }
+            .getOrNull() ?: return SmoothEnd.NoProgram
         val timer = Timer(true)
         var limit: TimerTask? = null
         fun within(ms: Long) {
             limit?.cancel()
             limit = timer.schedule(ms) { runCatching { bt.close() } }
+        }
+        within(STEP_MS) // the connect too: one that never returns can't keep smooth mode from trying again
+        runCatching { bt.connect() }.onFailure {
+            log { "smooth: no Controlled for PC over Bluetooth: $it" }
+            timer.cancel()
+            runCatching { bt.close() }
+            return SmoothEnd.NoProgram
         }
         var asked = false
         try {
@@ -228,6 +235,19 @@ class SmoothLink(context: Context) {
 
     fun text(t: String) = textPieces(t).forEach { event(byteArrayOf('T'.code.toByte()) + it.toByteArray()) }
 
+    /** PC 1.0.6+ ([canPaste]): [t] goes in through the PC's clipboard and Ctrl+V, whole, however long. */
+    fun paste(t: String) = textPieces(t).forEach { event(byteArrayOf('P'.code.toByte()) + it.toByteArray()) }
+
+    /** PC 1.0.6+ ([canPaste]): [n] Backspaces at once on the PC, instead of one event each. */
+    fun erase(n: Int) = event(byteArrayOf('D'.code.toByte(), (n shr 8).toByte(), n.toByte()))
+
+    /**
+     * The PC said it takes [paste] and [erase] (1.0.6+). 2026-11-11: Windows 11 lost and repeated characters when a long
+     * text was typed key by key (464 in 3.7 s; Windows 10 typed it exact), so pasted text goes in by Ctrl+V.
+     */
+    @Volatile var canPaste = false
+        private set
+
     /**
      * One of PcHid's Bluetooth reports, sent the smooth way: keyboard and button state over TCP (the PC diffs them, so
      * nothing stays held), wheel over UDP, media keys over TCP. Moves don't come here: [move] sends them directly.
@@ -262,6 +282,8 @@ class SmoothLink(context: Context) {
                 last = counter
                 // What's in front, when it changes (E0 normal, E1 an administrator's window, E2 the secure screen).
                 if (e.size == 2 && e[0] == 'E'.code.toByte()) Front.entries.getOrNull(e[1] - '0'.code.toByte())?.let(onFront)
+                // What the PC takes beyond keys and text: 1 = paste and erase (PC 1.0.6+).
+                if (e.size == 2 && e[0] == 'C'.code.toByte()) canPaste = e[1] >= 1
             }
         }
     }
