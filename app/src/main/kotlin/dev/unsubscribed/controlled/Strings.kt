@@ -76,6 +76,8 @@ interface Strings {
     val forgetTv: String
     val privacy: String
     val sourceCode: String
+    /** Your controllers' footer: who makes Controlled and why it's free. */
+    val madeBy: String
     val rename: String
     val renameTitle: String
     val tvName: String
@@ -322,6 +324,7 @@ object En : Strings {
     override val forgetTv = "Forget this TV"
     override val privacy = "Privacy policy"
     override val sourceCode = "Source code"
+    override val madeBy = "Controlled is from Unsubscribed!: open source, and free because it costs nothing to run."
     override val rename = "Rename"
     override val renameTitle = "Name this TV"
     override val tvName = "TV name"
@@ -557,6 +560,7 @@ object Es : Strings {
     override val forgetTv = "Olvidar este TV"
     override val privacy = "Política de privacidad"
     override val sourceCode = "Código fuente"
+    override val madeBy = "Controlled es de Unsubscribed!: código abierto, y gratis porque correrlo no nos cuesta nada."
     override val rename = "Cambiar nombre"
     override val renameTitle = "Nombra este TV"
     override val tvName = "Nombre del TV"

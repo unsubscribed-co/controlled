@@ -27,6 +27,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -38,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -48,6 +51,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+
+/** Unsubscribed!'s home: what it makes and the deal behind it. */
+const val UNSUBSCRIBED_URL = "https://unsubscribed.dev/"
 
 /** The controller's name at the top of its screen, with ▾: a tap opens Your controllers. */
 @Composable
@@ -89,6 +95,17 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
                     Icon(painterResource(R.drawable.sym_computer), null)
                     Text(t.addPc, Modifier.padding(start = 8.dp))
                 }
+            }
+            // Who makes it and why it's free, where TV and PC users both pass: one quiet line and its links, nothing in the way.
+            val uri = LocalUriHandler.current
+            Text(t.madeBy, Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Muted like the line above: links to find, never a call to action.
+            val quiet = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(Modifier.padding(horizontal = 12.dp)) {
+                TextButton({ uri.openUri(UNSUBSCRIBED_URL) }, Modifier.heightIn(min = 48.dp), colors = quiet) { Text("Unsubscribed!", style = MaterialTheme.typography.bodySmall) }
+                TextButton({ uri.openUri(BuildConfig.SOURCE_URL) }, Modifier.heightIn(min = 48.dp), colors = quiet) { Text(t.sourceCode, style = MaterialTheme.typography.bodySmall) }
+                TextButton({ uri.openUri(BuildConfig.PRIVACY_URL) }, Modifier.heightIn(min = 48.dp), colors = quiet) { Text(t.privacy, style = MaterialTheme.typography.bodySmall) }
             }
         }
     }

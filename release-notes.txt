@@ -1,10 +1,6 @@
 <en-US>
-- PC: pasted text arrives whole and exact through the PC's clipboard, which keeps what you had copied. Typing and deleting are steadier, with a clearer typing field.
-- Over windows run as administrator, smooth mode switches to Bluetooth by itself and back.
-- Add a PC lists computers already paired. Smooth mode recovers after re-pairing or a PC restart. Update Controlled for PC to 1.0.6 too.
+- "Your controls" now ends with a quiet line on who makes Controlled and why it's free, with links to Unsubscribed!, the source code and privacy, for both TV and PC.
 </en-US>
 <es-419>
-- PC: el texto pegado llega completo y exacto por el portapapeles del PC, que conserva lo que tenías copiado. Escribir y borrar es más estable, con un campo de texto más claro.
-- Sobre ventanas de administrador, el modo fluido pasa solo a Bluetooth y vuelve.
-- Agregar un PC muestra los que ya están emparejados. El modo fluido se recupera tras re-emparejar o reiniciar el PC. Actualiza también Controlled for PC a la 1.0.6.
+- "Tus controles" termina con una línea discreta sobre quién hace Controlled y por qué es gratis, con enlaces a Unsubscribed!, al código fuente y a privacidad, para TV y PC.
 </es-419>
