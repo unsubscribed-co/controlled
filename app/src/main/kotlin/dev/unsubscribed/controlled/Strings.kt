@@ -119,6 +119,8 @@ interface Strings {
     val edit: String
     val done: String
     val editHint: String
+    /** The bar's TV name, when there are more TVs: what a tap does. */
+    fun switchTo(tv: String): String
     fun pin(app: String): String
     fun unpin(app: String): String
     fun moveEarlier(app: String): String
@@ -247,6 +249,17 @@ interface Strings {
     val switchWindow: String
     val mute: String
     val playPause: String
+    // Home screen widget and voice
+    val power: String
+    val homeUnreachable: String
+    val barChannel: String
+    val barSwitch: String
+    val barSwitchHint: String
+    val widgetNoTv: String
+    val openRemote: String
+    val speak: String
+    val voicePrompt: String
+    val noVoice: String
     val previous: String
     val next: String
     val renamePc: String
@@ -485,6 +498,17 @@ object En : Strings {
     override val switchWindow = "Switch"
     override val mute = "Mute"
     override val playPause = "Play or pause"
+    override val power = "Turn on or off"
+    override val homeUnreachable = "Your TV didn't answer. Is it on, and is the phone on its Wi-Fi?"
+    override val barChannel = "TV remote"
+    override val barSwitch = "Remote in notifications"
+    override val barSwitchHint = "Keys in the notification shade and on the lock screen"
+    override val widgetNoTv = "Add your TV in Controlled"
+    override val openRemote = "Open the remote"
+    override fun switchTo(tv: String) = "Switch to $tv"
+    override val speak = "Speak"
+    override val voicePrompt = "Say an app, \"volume 10\", or what to search"
+    override val noVoice = "This phone has no speech recognition"
     override val previous = "Previous"
     override val next = "Next"
     override val renamePc = "Name this PC"
@@ -722,6 +746,17 @@ object Es : Strings {
     override val switchWindow = "Cambiar"
     override val mute = "Silenciar"
     override val playPause = "Reproducir o pausar"
+    override val power = "Encender o apagar"
+    override val homeUnreachable = "Tu TV no respondió. ¿Está encendido y el celular en su Wi-Fi?"
+    override val barChannel = "Control del TV"
+    override val barSwitch = "Control en las notificaciones"
+    override val barSwitchHint = "Botones en la barra de notificaciones y en la pantalla de bloqueo"
+    override val widgetNoTv = "Agrega tu TV en Controlled"
+    override val openRemote = "Abrir el control"
+    override fun switchTo(tv: String) = "Cambiar a $tv"
+    override val speak = "Hablar"
+    override val voicePrompt = "Di una app, \"volumen 10\" o lo que quieras buscar"
+    override val noVoice = "Este celular no tiene reconocimiento de voz"
     override val previous = "Anterior"
     override val next = "Siguiente"
     override val renamePc = "Nombra este PC"

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The small remote at full size: 216dp wide with 48dp keys (Android gives it ~242dp at 360dp, ~254dp at 375dp). -->
+<resources>
+    <dimen name="bar_key">48dp</dimen>
+    <dimen name="bar_dpad">144dp</dimen>
+    <dimen name="bar_rocker">52dp</dimen>
+    <dimen name="bar_rocker_half">72dp</dimen>
+    <dimen name="bar_gap">20dp</dimen>
+    <dimen name="bar_row">216dp</dimen>
+    <dimen name="bar_slot2">56dp</dimen>
+    <dimen name="bar_slot3">112dp</dimen>
+</resources>

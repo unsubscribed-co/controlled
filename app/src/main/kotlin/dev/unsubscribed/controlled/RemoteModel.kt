@@ -26,6 +26,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -121,7 +122,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     private fun on(e: Event) {
         val was = status
         status = next(was, e)
-        if (status != was) log { "status: $was -> $status ($e)" }
+        if (status == was) return
+        log { "status: $was -> $status ($e)" }
+        // The notification bar shows what's on only while connected and awake.
+        if (was is Status.Connected || status is Status.Connected) RemoteWidget.refresh(getApplication())
     }
 
     val isConnected get() = status is Status.Connected
@@ -217,6 +221,11 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         }
         if (screen == Screen.Find) return search()
         if (tv == null) return
+        link()
+    }
+
+    /** Back to a live socket if one is kept (checked with a quick probe), else connect. */
+    private fun link() {
         val c = client
         if (c != null && isConnected) viewModelScope.launch {
             // Android may have frozen the process in the background: a socket that doesn't answer in 700 ms is gone.
@@ -230,6 +239,10 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun stop() {
         visible = false
         search?.cancel()
+        closeLater()
+    }
+
+    private fun closeLater() {
         grace?.cancel()
         grace = viewModelScope.launch {
             delay(GRACE_MS)
@@ -237,7 +250,87 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             disconnect()
             on(Event.Reset)
             hid?.stop()
+            // The bar no longer knows what's on.
+            RemoteWidget.refresh(getApplication())
         }
+    }
+
+    /** Until when a home screen press keeps the link trying with the app closed (the widget's own grace). */
+    private var homeUntil = 0L
+    /** The socket is up and ready for presses (the status alone can lag a reconnect by a moment). */
+    private val linked get() = isConnected && (client != null || gtv != null)
+    /** An LG has no play-or-pause toggle: the widget's one button alternates, starting with pause (something is playing). */
+    private var homePaused = false
+
+    /**
+     * A press from the home screen widget or its mic, with the app closed or open: on the default TV, connecting first
+     * if needed, and keeping the link [GRACE_MS] for the next one. False when the TV couldn't be reached.
+     */
+    suspend fun fromHome(key: String): Boolean {
+        val target = controllers.homeTv() ?: return false
+        if (!visible) {
+            if (tv?.id != target.id) select(target)
+            homeUntil = System.currentTimeMillis() + GRACE_MS
+            // A stale Waiting (the TV was off a minute ago) tries again right now, not on the retry schedule.
+            if (!linked && (session?.isActive != true || status is Status.Waiting)) { on(Event.Reset); connect() } else link()
+            closeLater()
+        } else if (tv == null) return false // the app is open on a PC: the widget doesn't take it away
+        val t0 = System.currentTimeMillis()
+        // Waiting means two attempts failed: the TV is off or away, and a press from the couch shouldn't hang on it.
+        withTimeoutOrNull(8_000) { while (!linked && status !is Status.Waiting && status !is Status.Refused && status != Status.NoWifi) delay(50) }
+        log { "home $key: linked=$linked after ${System.currentTimeMillis() - t0} ms ($status)" }
+        if (key == HomeKey.POWER) {
+            if (!linked) { powerOn(); return true }
+            if (isGtv) { gtvKey(Gtv.POWER); return true }
+            // Standby or on: the power state arrives just after connecting.
+            withTimeoutOrNull(1_000) { while (powerState == null) delay(50) }
+            if (asleep) powerOn() else powerOff()
+            return true
+        }
+        if (!linked) return false
+        when {
+            key == HomeKey.VOLUME_UP -> volumeUp()
+            key == HomeKey.VOLUME_DOWN -> volumeDown()
+            key == HomeKey.PLAY_PAUSE -> if (isGtv) gtvKey(Gtv.PLAY_PAUSE) else { if (homePaused) play() else pause(); homePaused = !homePaused }
+            key in HomeKey.BUTTONS -> button(key)
+            key.startsWith(HomeKey.SAID) -> {
+                // An LG's apps load just after connecting: "Netflix" must find Netflix, not search for it.
+                withTimeoutOrNull(2_000) { while (apps.isEmpty()) delay(50) }
+                voice(key.removePrefix(HomeKey.SAID))
+            }
+        }
+        return true
+    }
+
+    /** A spoken phrase: an app, volume, mute or input by name, else a search ([voiceCommand]). */
+    fun voice(said: String) {
+        val v = voiceCommand(said, apps, inputs)
+        log { "voice '$said' -> $v" }
+        when (v) {
+            is Voice.Launch -> launch(v.app)
+            is Voice.Volume -> if (!isGtv) request("audio/setVolume", buildJsonObject { put("volume", v.level) })
+                // A Google TV only steps: from the level it reported, when it did.
+                else volume?.let { now -> repeat(kotlin.math.abs(v.level - now)) { gtvKey(if (v.level > now) Gtv.VOLUME_UP else Gtv.VOLUME_DOWN) } }
+            is Voice.Mute -> if (!isGtv) request("audio/setMute", buildJsonObject { put("mute", v.on) }) else if (muted != v.on) gtvKey(Gtv.MUTE)
+            is Voice.Input -> switchInput(v.input)
+            is Voice.Search -> search(v.text)
+        }
+    }
+
+    /** Into the TV's search field when its keyboard is up, else a YouTube search on the TV. */
+    private fun search(text: String) {
+        if (tvKeyboard) {
+            typeChange("", text)
+            return enter()
+        }
+        // Measured 2026-11-21: /tv/search?q= shows results on the LG and the onn; on the LG tv#/search, /results and
+        // contentId only open YouTube. Spaces as %20: the onn showed "+" literally.
+        val link = "https://www.youtube.com/tv/search?q=" + java.net.URLEncoder.encode(text, "UTF-8").replace("+", "%20")
+        if (isGtv) gtvPress { it.launch(link) }
+        else request("system.launcher/launch", buildJsonObject {
+            put("id", "youtube.leanback.v4")
+            put("params", buildJsonObject { put("contentTarget", link) })
+        })
     }
 
     fun search() {
@@ -362,6 +455,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         tv = controller as? PairedTv
         pc = controller as? PairedPc
         screen = screenFor(controller)
+        // The bar and the widget follow the TV picked here: they pointed at the onn while the LG was on (2026-11-18).
+        if (controller is PairedTv && controller.id != controllers.homeTv()?.id) saveAll(controllers.copy(home = controller.id))
         if (visible) start()
     }
 
@@ -387,6 +482,15 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun cancelAdd() = select(controllers.defaultOne())
 
     fun setDefault(controller: Controller) = saveAll(controllers.copy(default = controller.id))
+
+    fun setBar(on: Boolean) = saveAll(controllers.copy(bar = on))
+
+    /** The bar's TV name: the next TV takes the bar and the widget (the app keeps its own). */
+    fun nextHomeTv() {
+        val tvs = controllers.tvs
+        if (tvs.size < 2) return
+        saveAll(controllers.copy(home = tvs[(tvs.indexOf(controllers.homeTv()) + 1) % tvs.size].id))
+    }
 
     fun remove(controller: Controller) {
         val rest = controllers.copy(tvs = controllers.tvs.filter { it.id != controller.id }, pcs = controllers.pcs.filter { it.id != controller.id })
@@ -478,6 +582,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     private fun saveAll(all: Controllers) {
         store.save(all)
         controllers = all
+        RemoteWidget.refresh(getApplication())
     }
 
     /**
@@ -526,7 +631,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
                     if (attempt >= 1) on(Event.Failed)
                     if (!waking && searchNow(attempt) && lookAgain(current, attempt)) continue
                 }
-                if (!visible) return@launch
+                if (!visible && System.currentTimeMillis() > homeUntil) return@launch
                 delay(if (waking) 1_000 else retryDelay(attempt++))
             }
         }
@@ -562,6 +667,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         on(Event.Connected)
         apps.clear()
         apps += Gtv.APPS.map { TvApp(it.id, it.title, null) }
+        RemoteWidget.refresh(getApplication())
         val watchers = listOf(
             // Off reads as LG's standby, so the header and status line offer Turn on the same way.
             viewModelScope.launch {
@@ -574,6 +680,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 g.app.collect { id ->
                     foreground = id
+                    RemoteWidget.refresh(getApplication())
                     val paired = tv
                     if (id != null && paired != null && Gtv.app(id) != null && id !in paired.seen) save(paired.copy(seen = paired.seen + id))
                 }
@@ -632,6 +739,15 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Dev test only (MainActivity's tv_ip): the TV now 'lives' at [ip], as after a router change. */
+    /** Dev test: one raw request to the LG, or a link to the Google TV, with the TV's reply in the log. */
+    fun devSend(uri: String, payload: String) {
+        if (isGtv) return gtvPress { it.launch(payload); log { "dev link $payload sent" } }
+        press { c, _ -> viewModelScope.launch {
+            val reply = runCatching { c.request(uri, kotlinx.serialization.json.Json.parseToJsonElement(payload).jsonObject) }
+            log { "dev $uri $payload -> $reply" }
+        } }
+    }
+
     fun devMoveTv(ip: String) {
         val paired = tv ?: return
         save(paired.copy(ip = ip))
@@ -691,7 +807,8 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
         queue.drain(System.currentTimeMillis()).forEach { it(c, p) }
         sendShare(c)
         val watchers = listOf(
-            viewModelScope.launch { loadApps(c) },
+            // The widget shows the TV's icons once they're here.
+            viewModelScope.launch { loadApps(c); RemoteWidget.refresh(getApplication()) },
             viewModelScope.launch {
                 runCatching {
                     c.subscribe("audio/getVolume").collect { payload ->
@@ -703,7 +820,7 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
             },
             viewModelScope.launch {
                 runCatching {
-                    c.subscribe("com.webos.applicationManager/getForegroundAppInfo").collect { foreground = it.string("appId") }
+                    c.subscribe("com.webos.applicationManager/getForegroundAppInfo").collect { foreground = it.string("appId"); RemoteWidget.refresh(getApplication()) }
                 }
             },
             viewModelScope.launch {
@@ -872,13 +989,45 @@ class RemoteModel(app: Application) : AndroidViewModel(app) {
     fun typeChange(before: String, after: String) {
         val common = before.commonPrefixWith(after).length
         val deletes = before.length - common
-        if (isGtv) return gtvPress { g -> repeat(deletes) { g.key(Gtv.DEL) }; g.text(after.substring(common)) }
+        log { "type '$before' -> '$after': delete $deletes, insert '${after.substring(common)}'" }
+        if (isGtv) return gtvEdit(deletes, after.substring(common))
         if (deletes > 0) request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", deletes) })
         if (after.length > common) request("com.webos.service.ime/insertText", buildJsonObject { put("text", after.substring(common)); put("replace", 0) })
     }
 
+    /**
+     * A Google TV takes Delete as a key and text through its keyboard, and applies the text first: "hola mun" corrected
+     * to "minero" showed "hola muniner" (2026-11-21). So text waits [gtvDeleteWaitMs] after the last Delete, in order.
+     */
+    private fun gtvEdit(deletes: Int, insert: String) = gtvPress { g ->
+        viewModelScope.launch {
+            gtvTyping.withLock {
+                if (deletes > 0) {
+                    repeat(deletes) { g.key(Gtv.DEL) }
+                    lastGtvDelete = android.os.SystemClock.uptimeMillis()
+                }
+                if (insert.isNotEmpty()) {
+                    delay(lastGtvDelete + gtvDeleteWaitMs - android.os.SystemClock.uptimeMillis())
+                    g.text(Gtv.typeable(insert))
+                }
+            }
+        }
+    }
+    private val gtvTyping = kotlinx.coroutines.sync.Mutex()
+    private var lastGtvDelete = 0L
+    /** Measured on the onn 2026-11-21: no wait garbled 1 in 4 corrections, 100 ms none in 10 (dev builds can change it). */
+    var gtvDeleteWaitMs = 100L
+
+    /** Dev test: the phone's field goes through [states] one by one, [gapMs] apart, as a keyboard would. */
+    fun devType(states: List<String>, gapMs: Long) = viewModelScope.launch {
+        for ((before, after) in states.zipWithNext()) {
+            typeChange(before, after)
+            delay(gapMs)
+        }
+    }
+
     fun enter() = if (isGtv) gtvKey(Gtv.ENTER) else request("com.webos.service.ime/sendEnterKey")
-    fun delete() = if (isGtv) gtvKey(Gtv.DEL) else request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", 1) })
+    fun delete() = if (isGtv) gtvEdit(1, "") else request("com.webos.service.ime/deleteCharacters", buildJsonObject { put("count", 1) })
 
     fun move(dx: Int, dy: Int) {
         pointer?.move(dx, dy)

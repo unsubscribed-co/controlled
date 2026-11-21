@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The home screen widget only (Theme.kt's light palette); the app's own colors are in Compose. -->
+<resources>
+    <color name="widget_bg">#FFF0ECE7</color>
+    <color name="widget_key">#FFFBF9F6</color>
+    <color name="widget_fg">#FF1C1A17</color>
+    <color name="widget_accent">#FFB83A12</color>
+    <color name="widget_key_strong">#FFEAE5DF</color>
+    <color name="widget_on_accent">#FFFFFFFF</color>
+</resources>

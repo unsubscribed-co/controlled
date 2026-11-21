@@ -1,6 +1,12 @@
 package dev.unsubscribed.controlled
 
+import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.activity.result.contract.ActivityResultContracts
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -258,6 +264,21 @@ fun KeyboardSheet(model: RemoteModel) {
                 context.getSystemService(ClipboardManager::class.java).primaryClip?.takeIf { it.itemCount > 0 }
                     ?.getItemAt(0)?.coerceToText(context)?.toString()?.takeIf { it.isNotEmpty() }
                     ?.let { clip -> model.typeChange(text, text + clip); text += clip }
+            }
+            // Dictation: Android's speech dialog, and what was said is typed like the rest.
+            val language = LocalConfiguration.current.locales[0].toLanguageTag()
+            val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { said ->
+                    val add = if (text.isEmpty() || text.endsWith(" ")) said else " $said"
+                    model.typeChange(text, text + add); text += add
+                }
+            }
+            Key(R.drawable.sym_mic, t.speak) {
+                try {
+                    speech.launch(speechIntent(language, t.typeHint))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(context, t.noVoice, Toast.LENGTH_SHORT).show()
+                }
             }
             Spacer(Modifier.weight(1f))
             Key(R.drawable.sym_backspace, t.deleteChar, repeat = true) { model.delete(); text = text.dropLast(1) }

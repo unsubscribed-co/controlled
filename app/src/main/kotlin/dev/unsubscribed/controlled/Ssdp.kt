@@ -73,11 +73,14 @@ object Ssdp {
         }
     }
 
-    /** "[LG] webOS TV UP7500PSC" -> "webOS TV UP7500PSC"; blank -> null. */
+    /** "[LG] Bedroom TV" -> "Bedroom TV"; an unnamed TV's "[LG] webOS TV UP7500PSC" (its model) -> "LG TV"; blank -> null. */
     fun displayName(friendlyName: String?): String? {
         val trimmed = friendlyName?.trim() ?: return null
-        return (if (trimmed.startsWith("[LG]", ignoreCase = true)) trimmed.drop(4).trim() else trimmed).ifBlank { null }
+        val name = if (trimmed.startsWith("[LG]", ignoreCase = true)) trimmed.drop(4).trim() else trimmed
+        return if (MODEL_NAME.matches(name)) "LG TV" else name.ifBlank { null }
     }
+
+    private val MODEL_NAME = Regex("webOS TV( [A-Z0-9-]+)?")
 
     /**
      * Searches for [timeoutMs] and emits each TV once (deduplicated by ip) as soon as its description is read.

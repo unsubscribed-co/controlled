@@ -13,7 +13,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.URL
 
 class MainActivity : ComponentActivity() {
-    private val model: RemoteModel by viewModels()
+    private val model get() = (application as ControlledApp).model
     /** Android 17's local network permission; always true before it existed. */
     private var allowed by mutableStateOf(false)
     /** Asked once and refused: the rationale offers the system settings instead. */
@@ -83,6 +82,13 @@ class MainActivity : ComponentActivity() {
         }
         // Reconnect test: --es tv_ip <wrong ip> makes the TV look moved, so the loop has to find it again (no router needed).
         if (BuildConfig.LOG) intent?.getStringExtra("tv_ip")?.let(model::devMoveTv)
+        // Search test: --es tv_uri system.launcher/launch --es tv_payload '<json>' (a Google TV takes the payload as a link).
+        // Typing test: --es type_seq 'h|ho|hol' (field states, the first is what's there now) --es del_wait 80 --es gap 120
+        if (BuildConfig.LOG) intent?.getStringExtra("type_seq")?.let { seq ->
+            intent.getStringExtra("del_wait")?.toLongOrNull()?.let { model.gtvDeleteWaitMs = it }
+            model.devType(seq.split("|"), intent.getStringExtra("gap")?.toLongOrNull() ?: 120)
+        }
+        if (BuildConfig.LOG) intent?.getStringExtra("tv_payload")?.let { model.devSend(intent.getStringExtra("tv_uri") ?: "system.launcher/launch", it) }
         // Smooth-mode test driver: --es wifi_mouse <PC Bluetooth address> (WifiMouse).
         if (BuildConfig.LOG) intent?.getStringExtra("wifi_mouse")?.let { WifiMouse.draw(this, it) }
         // Stuck-key guard test (PcHid.stallTest): --es stall_test 1
@@ -99,7 +105,17 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         allowed = Build.VERSION.SDK_INT < 37 || checkSelfPermission(LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
         if (allowed || model.screen == Screen.Pc) model.start()
+        // The notification bar comes back here if it was swiped away; the first time a TV is set up, Android asks first.
+        RemoteWidget.refresh(this)
+        if (Build.VERSION.SDK_INT >= 33 && allowed && !askedBar && model.controllers.bar && model.controllers.tvs.isNotEmpty() && !RemoteBar.allowed(this)) {
+            askedBar = true
+            askBar.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
+
+    /** Asked once a launch at most; Android itself stops showing it after two refusals (the menu's switch says how). */
+    private var askedBar = false
+    private val askBar = registerForActivityResult(ActivityResultContracts.RequestPermission()) { RemoteWidget.refresh(this) }
 
     override fun onStop() {
         model.stop()

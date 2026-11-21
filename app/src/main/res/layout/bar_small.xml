@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The notification bar collapsed (RemoteBar.kt) under 370dp: the TV's name (tap: the next TV) and volume. Android gives
+  this row ~198dp at 360dp (~157dp at 320dp, measured 2026-11-18): with Play or pause too the name was cut to "L…".
+  Play or pause is a pull down away; layout-w370dp has it here. Android clips it at 48dp tall: keys fill those 48dp (no inset) with 26dp glyphs; the 40dp faces looked small on Juan's POCO.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="48dp" android:gravity="center_vertical" android:orientation="horizontal">
+    <LinearLayout android:id="@+id/name" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginEnd="6dp"
+        android:gravity="center_vertical" android:orientation="vertical">
+        <TextView android:id="@+id/now_title" android:drawableTint="@color/widget_fg" android:drawablePadding="4dp" style="@android:style/TextAppearance.Material.Notification.Title"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" />
+        <TextView android:id="@+id/now_sub" android:drawableTint="@color/widget_fg" android:drawablePadding="4dp" style="@android:style/TextAppearance.Material.Notification"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" />
+    </LinearLayout>
+    <ImageView android:id="@+id/volume_down" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:padding="10dp"
+        android:background="@drawable/bar_key" android:scaleType="fitCenter" android:src="@drawable/sym_volume_down" android:tint="@color/widget_fg" />
+    <ImageView android:id="@+id/volume_up" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:padding="10dp" android:layout_marginStart="4dp"
+        android:background="@drawable/bar_key" android:scaleType="fitCenter" android:src="@drawable/sym_volume_up" android:tint="@color/widget_fg" />
+    <ImageView android:id="@+id/play_pause" android:visibility="gone" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:padding="10dp" android:layout_marginStart="4dp"
+        android:background="@drawable/bar_key_accent" android:scaleType="fitCenter" android:src="@drawable/sym_play_pause" android:tint="@color/widget_on_accent" />
+</LinearLayout>

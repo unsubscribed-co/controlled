@@ -15,6 +15,9 @@ class GtvTest {
 
     @Test fun textAtCursorWithZeroCounters() = assertArrayEquals(hex("aa0112080010001a0c08011208080110011a026162"), Gtv.text("ab"))
 
+    // The onn's YouTube dropped "í" and "ñ" sent as text (2026-11-21): "películas" showed "pelculas".
+    @Test fun textWithoutAccents() = assertEquals("peliculas ano Nandu", Gtv.typeable("películas año Ñandú"))
+
     @Test fun appLink() = assertArrayEquals(hex("d205190a1768747470733a2f2f7777772e796f75747562652e636f6d"), Gtv.appLink("https://www.youtube.com"))
 
     @Test fun pairingRequest() = assertArrayEquals(hex("080210c80152170a0961747672656d6f7465120a436f6e74726f6c6c6564"), Gtv.pairingRequest("Controlled"))

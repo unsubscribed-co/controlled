@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The small remote (bar_big.xml, widget_remote.xml) on narrow screens, under 340dp (a small phone, or a larger display
+  size): Android gives the expanded notification ~200dp there (measured at 320dp, 2026-11-18), so it's 196dp wide with
+  44dp keys. values-w340dp has the full size.
+-->
+<resources>
+    <dimen name="bar_key">44dp</dimen>
+    <dimen name="bar_dpad">132dp</dimen>
+    <dimen name="bar_rocker">48dp</dimen>
+    <dimen name="bar_rocker_half">66dp</dimen>
+    <dimen name="bar_gap">16dp</dimen>
+    <dimen name="bar_row">196dp</dimen>
+    <!-- The widget's bottom row: Home and the mic, evenly between Back and Play or pause. -->
+    <dimen name="bar_slot2">51dp</dimen>
+    <dimen name="bar_slot3">101dp</dimen>
+</resources>

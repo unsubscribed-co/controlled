@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- bar_key.xml in the ember accent: Play or pause, the one filled key. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF">
+    <item><shape android:shape="oval"><solid android:color="@color/widget_accent" /></shape></item>
+</ripple>

@@ -56,10 +56,19 @@ data class PairedPc(
 
 /** Every controller set up on this phone, and the id of the one the app opens on. */
 @Serializable
-data class Controllers(val tvs: List<PairedTv> = emptyList(), val pcs: List<PairedPc> = emptyList(), val default: String? = null) {
+data class Controllers(
+    val tvs: List<PairedTv> = emptyList(),
+    val pcs: List<PairedPc> = emptyList(),
+    val default: String? = null,
+    /** The remote in the notification shade (RemoteBar.kt), on until the person turns it off. */
+    val bar: Boolean = true,
+    /** The TV the notification bar and the widget control, switched from the bar; else the default TV. */
+    val home: String? = null,
+) {
     val isEmpty get() = tvs.isEmpty() && pcs.isEmpty()
     val all: List<Controller> get() = tvs + pcs
     fun defaultOne(): Controller? = all.firstOrNull { it.id == default } ?: all.firstOrNull()
+    fun homeTv(): PairedTv? = tvs.firstOrNull { it.id == home } ?: defaultOne() as? PairedTv ?: tvs.firstOrNull()
 }
 
 /** In noBackupFilesDir: the keys only work on this home Wi-Fi and this phone, so they never leave it. */
@@ -70,7 +79,10 @@ class Store(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun load(): Controllers {
-        runCatching { return json.decodeFromString<Controllers>(file.readText()) }
+        // LGs paired before 1.25 kept their model number as the name: shown as "LG TV" now (a name given here stays).
+        runCatching { return json.decodeFromString<Controllers>(file.readText()).let { c ->
+            c.copy(tvs = c.tvs.map { if (it.brand == Brand.LG) it.copy(name = Ssdp.displayName(it.name) ?: it.name) else it })
+        } }
         val tv = runCatching { json.decodeFromString<PairedTv>(v1.readText()) }.getOrNull() ?: return Controllers()
         return Controllers(tvs = listOf(tv), default = tv.id).also(::save)
     }

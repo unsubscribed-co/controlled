@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Theme.kt's dark "lights down" palette: near-black, one ember accent. -->
+<resources>
+    <color name="widget_bg">#FF131418</color>
+    <color name="widget_key">#FF24262C</color>
+    <color name="widget_fg">#FFF2EEE9</color>
+    <color name="widget_accent">#FFFF6A3D</color>
+    <color name="widget_key_strong">#FF33353D</color>
+    <color name="widget_on_accent">#FF1A0A04</color>
+</resources>

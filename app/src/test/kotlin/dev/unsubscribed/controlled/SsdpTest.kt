@@ -115,8 +115,11 @@ class SsdpTest {
 
     @Test
     fun displayNameFormatting() {
-        assertEquals("webOS TV UP7500PSC", Ssdp.displayName("[LG] webOS TV UP7500PSC"))
-        assertEquals("webOS TV", Ssdp.displayName("webOS TV"))
+        // The model number is no name to read in a notification (2026-11-18): an unnamed LG is "LG TV".
+        assertEquals("LG TV", Ssdp.displayName("[LG] webOS TV UP7500PSC"))
+        assertEquals("LG TV", Ssdp.displayName("webOS TV"))
+        assertEquals("LG TV", Ssdp.displayName("LG TV"))
+        assertEquals("webOS TV room", Ssdp.displayName("webOS TV room"))
         assertEquals("Bedroom TV", Ssdp.displayName("[LG] Bedroom TV"))
         assertNull(Ssdp.displayName(null))
         assertNull(Ssdp.displayName(""))

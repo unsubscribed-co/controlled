@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- The remote in the notification shade (RemoteBar.kt), and putting it back after a restart. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Turning the TV on over Bluetooth LE, as LG ThinQ does (BleWake.kt). -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <!-- The phone as a Bluetooth keyboard and mouse for a PC (PcHid.kt). -->
@@ -16,8 +19,15 @@
     <!-- Turning the TV on with the phone's IR blaster, when it has one (IrWake.kt). -->
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
     <uses-feature android:name="android.hardware.consumerir" android:required="false" />
+    <!-- The mic opens Android's speech dialog (VoiceActivity.kt). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
 
     <application
+        android:name=".ControlledApp"
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="33"
@@ -42,6 +52,32 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- The widget's mic: Android's speech dialog over the home screen (VoiceActivity.kt). -->
+        <activity
+            android:name=".VoiceActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <receiver
+            android:name=".RemoteBar$Boot"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <!-- The home screen widget (RemoteWidget.kt). -->
+        <receiver
+            android:name=".RemoteWidget"
+            android:exported="false"
+            android:label="@string/tile_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_remote_info" />
+        </receiver>
         <!-- The Quick Settings tile that opens the remote (RemoteTile.kt). -->
         <service
             android:name=".RemoteTile"

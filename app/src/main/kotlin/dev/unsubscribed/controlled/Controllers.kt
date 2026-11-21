@@ -1,6 +1,16 @@
 package dev.unsubscribed.controlled
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,6 +106,7 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
                     Text(t.addPc, Modifier.padding(start = 8.dp))
                 }
             }
+            if (model.controllers.tvs.isNotEmpty()) BarSwitch(model)
             // Who makes it and why it's free, where TV and PC users both pass: one quiet line and its links, nothing in the way.
             val uri = LocalUriHandler.current
             Text(t.madeBy, Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp), style = MaterialTheme.typography.bodySmall,
@@ -119,6 +130,36 @@ fun ControllersSheet(model: RemoteModel, close: () -> Unit) {
         dismissButton = { TextButton({ fixing = false }) { Text(t.notNow) } },
         title = { Text(t.fixKeys) },
         text = { Text(t.fixKeysBody) },
+    )
+}
+
+/**
+ * The remote in the notification shade, on or off. Turning it on asks for Android 13's notification permission; once
+ * Android stops asking (refused twice), it opens the app's notification settings instead.
+ */
+@Composable
+private fun BarSwitch(model: RemoteModel) {
+    val t = LocalStrings.current
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    var allowed by remember { mutableStateOf(RemoteBar.allowed(context)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        allowed = granted
+        RemoteWidget.refresh(context)
+        if (!granted && activity?.shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) == false) {
+            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+        }
+    }
+    val on = model.controllers.bar && allowed
+    ListItem(
+        headlineContent = { Text(t.barSwitch) },
+        supportingContent = { Text(t.barSwitchHint) },
+        trailingContent = { Switch(on, null) },
+        modifier = Modifier.padding(horizontal = 8.dp).toggleable(on, role = Role.Switch) { want ->
+            model.setBar(want)
+            if (want && !allowed && Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }
 

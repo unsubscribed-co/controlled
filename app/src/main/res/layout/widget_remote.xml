@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The home screen widget (RemoteWidget.kt): the notification bar's small remote (bar_big.xml) on its own card, plus the
+  mic. The name opens the app.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/widget_bg" android:clipToOutline="true" android:gravity="center"
+    android:orientation="vertical" android:padding="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical" android:orientation="horizontal">
+        <!-- What's on: the app's own icon, or (now_tv) the TV symbol, tinted here so it follows light and dark. -->
+        <ImageView android:id="@+id/now_icon" android:layout_width="32dp" android:layout_height="32dp" android:layout_marginEnd="12dp" android:scaleType="fitCenter" />
+        <ImageView android:id="@+id/now_tv" android:layout_width="32dp" android:layout_height="32dp" android:layout_marginEnd="12dp" android:scaleType="center" android:src="@drawable/sym_tv" android:tint="@color/widget_fg" />
+        <LinearLayout android:id="@+id/name" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="vertical">
+            <TextView android:id="@+id/now_title" android:drawableTint="@color/widget_fg" android:drawablePadding="4dp" android:textColor="@color/widget_fg" android:textSize="16sp"
+                android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" />
+            <TextView android:id="@+id/now_sub" android:drawableTint="@color/widget_fg" android:drawablePadding="4dp" android:textColor="@color/widget_fg" android:alpha="0.7" android:textSize="13sp"
+                android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" />
+        </LinearLayout>
+        <ImageView android:id="@+id/power" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key"  android:background="@drawable/bar_key" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_power_settings_new" android:tint="@color/widget_accent" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="@dimen/bar_dpad" android:layout_gravity="center_horizontal"
+        android:layout_marginTop="6dp" android:orientation="horizontal">
+        <FrameLayout android:layout_width="@dimen/bar_dpad" android:layout_height="@dimen/bar_dpad" android:background="@drawable/bar_dpad">
+            <ImageView android:id="@+id/up" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="top|center_horizontal" android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_keyboard_arrow_up" android:tint="@color/widget_fg" />
+            <ImageView android:id="@+id/down" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="bottom|center_horizontal" android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_keyboard_arrow_down" android:tint="@color/widget_fg" />
+            <ImageView android:id="@+id/left" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="start|center_vertical" android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_keyboard_arrow_left" android:tint="@color/widget_fg" />
+            <ImageView android:id="@+id/right" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="end|center_vertical" android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_keyboard_arrow_right" android:tint="@color/widget_fg" />
+            <TextView android:id="@+id/ok" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="center"
+                android:background="@drawable/bar_ok" android:gravity="center" android:textColor="@color/widget_fg"
+                android:textSize="14sp" android:textStyle="bold" />
+        </FrameLayout>
+        <!-- The rocker's two halves are 72dp each: the easiest keys to hit without looking. -->
+        <LinearLayout android:layout_width="@dimen/bar_rocker" android:layout_height="@dimen/bar_dpad" android:layout_marginStart="@dimen/bar_gap"
+            android:background="@drawable/bar_pill" android:orientation="vertical">
+            <ImageView android:id="@+id/volume_up" android:layout_width="@dimen/bar_rocker" android:layout_height="@dimen/bar_rocker_half"  android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_add" android:tint="@color/widget_fg" />
+            <ImageView android:id="@+id/volume_down" android:layout_width="@dimen/bar_rocker" android:layout_height="@dimen/bar_rocker_half"  android:background="@drawable/bar_press" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_remove" android:tint="@color/widget_fg" />
+        </LinearLayout>
+    </LinearLayout>
+    <!-- Back, Home, the mic and Play or pause, 8dp apart across the d-pad and rocker (bar_row). -->
+    <FrameLayout android:layout_width="@dimen/bar_row" android:layout_height="@dimen/bar_key" android:layout_gravity="center_horizontal" android:layout_marginTop="6dp">
+        <ImageView android:id="@+id/back" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="start" android:background="@drawable/bar_key" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_arrow_back" android:tint="@color/widget_fg" />
+        <ImageView android:id="@+id/home" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="start" android:layout_marginStart="@dimen/bar_slot2" android:background="@drawable/bar_key" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_home" android:tint="@color/widget_fg" />
+        <ImageView android:id="@+id/mic" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="start" android:layout_marginStart="@dimen/bar_slot3" android:background="@drawable/bar_key" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_mic" android:tint="@color/widget_fg" />
+        <ImageView android:id="@+id/play_pause" android:layout_width="@dimen/bar_key" android:layout_height="@dimen/bar_key" android:layout_gravity="end" android:background="@drawable/bar_key" android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/sym_play_pause" android:tint="@color/widget_fg" />
+    </FrameLayout>
+</LinearLayout>

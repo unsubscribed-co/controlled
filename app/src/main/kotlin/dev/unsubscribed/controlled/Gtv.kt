@@ -58,7 +58,7 @@ object Gtv {
     // Android KeyEvent codes, as the TV takes them.
     const val HOME = 3; const val BACK = 4; const val UP = 19; const val DOWN = 20; const val LEFT = 21; const val RIGHT = 22
     const val CENTER = 23; const val VOLUME_UP = 24; const val VOLUME_DOWN = 25; const val POWER = 26; const val ENTER = 66
-    const val DEL = 67; const val MENU = 82; const val PLAY = 126; const val PAUSE = 127; const val MUTE = 164
+    const val PLAY_PAUSE = 85; const val DEL = 67; const val MENU = 82; const val PLAY = 126; const val PAUSE = 127; const val MUTE = 164
     const val CHANNEL_UP = 166; const val CHANNEL_DOWN = 167
 
     /** The remote's button names (as the LG pointer socket takes them) to key codes. */
@@ -184,6 +184,13 @@ object Gtv {
     fun setActive(features: Int) = msg(2, int(1, features))
     fun pong(value: Int) = msg(9, int(1, value))
     fun key(code: Int) = msg(10, int(1, code), int(2, 3)) // 3: a short press
+    /**
+     * Letters without accents, ñ as n: the onn's YouTube dropped "í" and "ñ" sent as text ("películas" showed "pelculas",
+     * 2026-11-21). One letter for one, so the phone's deletes still line up. shortcut: applied in every app, where some
+     * may take accents; untested elsewhere.
+     */
+    fun typeable(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+
     fun text(value: String) = msg(21, int(1, 0), int(2, 0), msg(3, int(1, 1), msg(2, int(1, value.length - 1), int(2, value.length - 1), str(3, value))))
     fun appLink(link: String) = msg(90, str(1, link))
 }
