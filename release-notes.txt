@@ -1,8 +1,12 @@
 <en-US>
-- PC: text you copy on the PC while you control it lands on your phone's clipboard, ready to paste (Controlled for PC 1.0.7).
-- Allowing this phone on a PC: the code shows above the trackpad instead of covering it, so you can click Yes on the PC from the phone.
+- A remote in the notification bar and a home screen widget: control the TV without opening the app. Tap the TV's name to switch TVs.
+- Widget mic: say an app, "volume 10", "mute", an input, or anything else to search YouTube, in English or Spanish.
+- Typing on Google TV: corrections and suggestions from your keyboard no longer scramble the text.
+- An LG TV without a name shows as "LG TV".
 </en-US>
 <es-419>
-- PC: el texto que copias en el PC mientras lo controlas llega al portapapeles de tu celular, listo para pegar (Controlled for PC 1.0.7).
-- Al permitir este celular en un PC, el código aparece encima del trackpad en vez de taparlo, así puedes hacer clic en Sí en el PC desde el celular.
+- Un control en la barra de notificaciones y un widget en la pantalla de inicio: maneja la TV sin abrir la app. Toca el nombre de la TV para cambiar de TV.
+- Micrófono del widget: di una app, "volumen 10", "silencio", una entrada, o cualquier otra cosa para buscarla en YouTube, en español o inglés.
+- Escribir en Google TV: las correcciones y sugerencias del teclado ya no revuelven el texto.
+- Una LG sin nombre aparece como "LG TV".
 </es-419>
